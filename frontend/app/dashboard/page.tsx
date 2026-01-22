@@ -75,17 +75,6 @@ const MOCK_PROBLEMS = [
     },
 ];
 
-const StatusIcon = ({ status }: { status: string }) => {
-    switch (status) {
-        case "solved":
-            return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-        case "failed":
-            return <XCircle className="h-4 w-4 text-red-500" />;
-        default:
-            return <Clock className="h-4 w-4 text-yellow-500" />;
-    }
-};
-
 const DifficultyBadge = ({ level }: { level: string }) => {
     const colors: Record<string, string> = {
         Easy: "bg-green-500/10 text-green-500 hover:bg-green-500/20 border-green-500/20",
@@ -138,23 +127,17 @@ export default function DashboardPage() {
                 <Table>
                     <TableHeader className="bg-muted/50">
                         <TableRow className="hover:bg-transparent border-border/50">
-                            <TableHead className="w-[50px]"></TableHead>
-                            <TableHead>Problem Name</TableHead>
+                            <TableHead >Problem Name</TableHead>
                             <TableHead>Company</TableHead>
                             <TableHead>Difficulty</TableHead>
                             <TableHead>Last Practiced</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
+                            <TableHead >Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {MOCK_PROBLEMS.length > 0 ? (
                             MOCK_PROBLEMS.map((problem) => (
                                 <TableRow key={problem.id} className="hover:bg-muted/30 border-border/50 group cursor-pointer transition-colors">
-                                    <TableCell>
-                                        <div className="flex items-center justify-center">
-                                            <StatusIcon status={problem.status} />
-                                        </div>
-                                    </TableCell>
                                     <TableCell>
                                         <div className="font-semibold text-foreground group-hover:text-primary transition-colors">
                                             {problem.title}
@@ -169,7 +152,7 @@ export default function DashboardPage() {
                                     <TableCell className="text-muted-foreground text-sm">
                                         {problem.lastPracticed}
                                     </TableCell>
-                                    <TableCell className="text-right">
+                                    <TableCell>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
