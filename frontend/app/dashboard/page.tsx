@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 import {
     Table,
     TableBody,
@@ -97,8 +98,9 @@ export default function DashboardPage() {
                     </p>
                 </div>
                 <Button className="font-semibold shadow-lg shadow-primary/20">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Recall New Problem
+                    <Link href="/dashboard/create">
+                        Recall New Problem
+                    </Link>
                 </Button>
             </div>
 
