@@ -31,6 +31,7 @@ import {
     Settings2,
     Eye
 } from "lucide-react";
+import TextareaAutosize from 'react-textarea-autosize';
 
 // --- Sub-Component: The Input Form (Left Side) ---
 function ConfigurationPanel({ data, setData }: { data: any, setData: any }) {
@@ -117,12 +118,13 @@ function ConfigurationPanel({ data, setData }: { data: any, setData: any }) {
                                 Markdown supported
                             </Badge>
                         </div>
-                        <Textarea
+                        <TextareaAutosize
                             id="description"
                             value={data.description}
                             onChange={(e) => setData({ ...data, description: e.target.value })}
                             placeholder="Paste your messy memory here..."
-                            className="w-full min-h-[300px] p-4 font-mono text-sm leading-relaxed bg-background/50 resize-y"
+                            minRows={15}
+                            className="border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 flex w-full rounded-md border text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm min-h-[300px] p-4 font-mono leading-relaxed bg-background/50 resize-y"
                         />
                     </div>
                 </div>
