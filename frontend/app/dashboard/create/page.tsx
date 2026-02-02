@@ -34,7 +34,43 @@ import {
 import TextareaAutosize from 'react-textarea-autosize';
 
 // --- Sub-Component: The Input Form (Left Side) ---
-function ConfigurationPanel({ data, setData }: { data: any, setData: any }) {
+function ConfigurationPanel({ data, setData, onGenerateSuccess }: { data: any, setData: any, onGenerateSuccess: (data: any) => void }) {
+
+    const [isGenerating, setIsGenerating] = useState<boolean>(false);
+
+    async function handleGenerateDraft() {
+        console.log("Generating Draft...");
+        setIsGenerating(true);
+
+        try{
+            const result = await fetch("/api/generate", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    memory: data.description,
+                    difficulty: data.difficulty,
+                    company: data.company,
+                }),
+            });
+
+            if(!result.ok){
+                const err = await result.json();
+                throw new Error(err.error || "Failed to generate");
+            }
+
+            const res = await result.json();
+
+            console.log("AI Result:", res);
+            onGenerateSuccess(res);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsGenerating(false);
+        }
+    }
+
     return (
         // FIX HERE: Added "overflow-hidden" to force the ScrollArea to be contained
         <div className="flex flex-col h-full relative overflow-hidden">
@@ -135,10 +171,11 @@ function ConfigurationPanel({ data, setData }: { data: any, setData: any }) {
                 <Button
                     size="lg"
                     className="w-full font-semibold shadow-md"
-                    onClick={() => console.log("Generating Draft...")}
+                    onClick={handleGenerateDraft}
+                    disabled={isGenerating}
                 >
                     <Wand2 className="mr-2 h-4 w-4" />
-                    Generate Draft
+                    {isGenerating ? "Generating..." : "Generate Draft"}
                 </Button>
             </div>
         </div>
@@ -146,55 +183,149 @@ function ConfigurationPanel({ data, setData }: { data: any, setData: any }) {
 }
 
 // --- Sub-Component: The Preview (Right Side) ---
-function PreviewPanel() {
+function PreviewPanel({ generatedData }: { generatedData: any }) {
+    const cleanText = (value?: string) =>
+        (value ?? "")
+            .replace(/```/g, "")
+            .replace(/`/g, "")
+            .replace(/\$/g, "")
+            .replace(/^###\s+/gm, "")
+            .trim();
+
+    const isLoading = !generatedData;
+
+    if (isLoading) {
+        return (
+            <div className="flex flex-col h-full bg-muted/10 overflow-hidden">
+                <div className="h-14 border-b flex items-center justify-between px-6 bg-background/50 backdrop-blur-sm shrink-0">
+                    <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium text-muted-foreground">Live Preview</span>
+                    </div>
+                    <Button variant="secondary" size="sm" disabled className="gap-2">
+                        <Save className="h-4 w-4" />
+                        Save to Dashboard
+                    </Button>
+                </div>
+
+                <ScrollArea className="flex-1 h-full">
+                    <div className="p-6 md:p-10 max-w-3xl mx-auto space-y-8 animate-in fade-in duration-700">
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                                <Skeleton className="h-6 w-20 rounded-full" />
+                                <Skeleton className="h-6 w-24 rounded-full" />
+                            </div>
+                            <Skeleton className="h-10 w-3/4" />
+                        </div>
+
+                        <div className="flex gap-8 py-4 border-y border-border/50">
+                            {[1, 2, 3].map((i) => (
+                                <div key={i} className="space-y-2">
+                                    <Skeleton className="h-3 w-16" />
+                                    <Skeleton className="h-4 w-24" />
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="space-y-3">
+                            <Skeleton className="h-4 w-full" />
+                            <Skeleton className="h-4 w-full" />
+                            <Skeleton className="h-4 w-[90%]" />
+                            <Skeleton className="h-4 w-[95%]" />
+                        </div>
+
+                        <div className="space-y-4 pt-4">
+                            <Skeleton className="h-6 w-32" />
+                            <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
+                                <div className="space-y-2">
+                                    <Skeleton className="h-3 w-12" />
+                                    <Skeleton className="h-4 w-full bg-background/50" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </ScrollArea>
+            </div>
+        );
+    }
+
     return (
-        <div className="flex flex-col h-full bg-muted/10 overflow-hidden"> {/* Added overflow-hidden here too just in case */}
+        <div className="flex flex-col h-full bg-muted/10 overflow-hidden">
             <div className="h-14 border-b flex items-center justify-between px-6 bg-background/50 backdrop-blur-sm shrink-0">
                 <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium text-muted-foreground">Live Preview</span>
                 </div>
-                <Button variant="secondary" size="sm" disabled className="gap-2">
+                <Button variant="secondary" size="sm" className="gap-2">
                     <Save className="h-4 w-4" />
                     Save to Dashboard
                 </Button>
             </div>
 
-            <ScrollArea className="flex-1">
-                <div className="p-6 md:p-10 max-w-3xl mx-auto space-y-8 animate-in fade-in duration-700">
+            <ScrollArea className="flex-1 h-full">
+                <div className="p-6 md:p-10 max-w-3xl mx-auto space-y-8">
+                    {/* Title and Badges */}
                     <div className="space-y-4">
-                        <div className="flex items-center gap-3">
-                            <Skeleton className="h-6 w-20 rounded-full" />
-                            <Skeleton className="h-6 w-24 rounded-full" />
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="secondary">{generatedData.difficulty}</Badge>
+                            <Badge variant="outline">{generatedData.company}</Badge>
                         </div>
-                        <Skeleton className="h-10 w-3/4" />
+                        <h1 className="text-3xl font-bold tracking-tight">{generatedData.title}</h1>
                     </div>
 
-                    <div className="flex gap-8 py-4 border-y border-border/50">
-                        {[1, 2, 3].map((i) => (
-                            <div key={i} className="space-y-2">
-                                <Skeleton className="h-3 w-16" />
-                                <Skeleton className="h-4 w-24" />
-                            </div>
-                        ))}
-                    </div>
-
+                    {/* Description */}
                     <div className="space-y-3">
-                        <Skeleton className="h-4 w-full" />
-                        <Skeleton className="h-4 w-full" />
-                        <Skeleton className="h-4 w-[90%]" />
-                        <Skeleton className="h-4 w-[95%]" />
-                    </div>
-
-                    <div className="space-y-4 pt-4">
-                        <Skeleton className="h-6 w-32" />
-                        <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
-                            <div className="space-y-2">
-                                <Skeleton className="h-3 w-12" />
-                                <Skeleton className="h-4 w-full bg-background/50" />
-                            </div>
+                        <h2 className="text-lg font-semibold">Description</h2>
+                        <div className="prose prose-sm dark:prose-invert max-w-none text-foreground leading-relaxed whitespace-pre-wrap">
+                            {cleanText(generatedData.description)}
                         </div>
                     </div>
+
+                    {/* Examples */}
+                    {generatedData.examples && generatedData.examples.length > 0 && (
+                        <div className="space-y-4 pt-4">
+                            <h2 className="text-lg font-semibold">Examples</h2>
+                            {generatedData.examples.map((example: any, idx: number) => (
+                                <div key={idx} className="rounded-lg border bg-muted/50 p-4 space-y-3">
+                                    <div className="space-y-2">
+                                        <span className="text-xs font-medium text-muted-foreground uppercase">Example {idx + 1}</span>
+                                        <div className="bg-background/50 p-3 rounded text-sm font-mono">
+                                            <div><strong>Input:</strong> {cleanText(example.input)}</div>
+                                            <div><strong>Output:</strong> {cleanText(example.output)}</div>
+                                        </div>
+                                        {example.explanation && (
+                                            <div className="text-sm text-foreground whitespace-pre-wrap">{cleanText(example.explanation)}</div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Constraints */}
+                    {generatedData.constraints && generatedData.constraints.length > 0 && (
+                        <div className="flex gap-8 py-4 border-y border-border/50 flex-wrap">
+                            <div className="space-y-1">
+                                <span className="text-xs font-medium text-muted-foreground uppercase">Constraints</span>
+                                <div className="space-y-1">
+                                    {generatedData.constraints.map((constraint: string, idx: number) => (
+                                        <div key={idx} className="text-sm text-foreground">{cleanText(constraint)}</div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Time Complexity */}
+                    {generatedData.time_complexity && (
+                        <div className="space-y-3 pt-4 border-t">
+                            <h2 className="text-lg font-semibold">Complexity</h2>
+                            <div className="text-sm">
+                                <span className="text-muted-foreground">Time: </span>
+                                <span className="font-mono">{generatedData.time_complexity}</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </ScrollArea>
         </div>
@@ -210,17 +341,23 @@ export default function CreateProblemPage() {
         description: "",
     });
 
+    const [generatedData, setGeneratedData] = useState<any>(null);
+
+    const handleGenerateSuccess = (data: any) => {
+        setGeneratedData(data);
+    };
+
     return (
         <div className="h-[calc(100dvh-4rem)] w-full overflow-hidden">
             {/* DESKTOP VIEW */}
             <div className="hidden md:block h-full w-full">
                 <ResizablePanelGroup direction="horizontal" className="h-full w-full border-t">
                     <ResizablePanel defaultSize={40} minSize={30} maxSize={50}>
-                        <ConfigurationPanel data={formData} setData={setFormData} />
+                        <ConfigurationPanel data={formData} setData={setFormData} onGenerateSuccess={handleGenerateSuccess} />
                     </ResizablePanel>
                     <ResizableHandle withHandle />
                     <ResizablePanel defaultSize={60}>
-                        <PreviewPanel />
+                        <PreviewPanel generatedData={generatedData} />
                     </ResizablePanel>
                 </ResizablePanelGroup>
             </div>
@@ -241,10 +378,10 @@ export default function CreateProblemPage() {
                         </TabsList>
                     </div>
                     <TabsContent value="config" className="flex-1 mt-0 overflow-hidden">
-                        <ConfigurationPanel data={formData} setData={setFormData} />
+                        <ConfigurationPanel data={formData} setData={setFormData} onGenerateSuccess={handleGenerateSuccess} />
                     </TabsContent>
                     <TabsContent value="preview" className="flex-1 mt-0 overflow-hidden bg-muted/10">
-                        <PreviewPanel />
+                        <PreviewPanel generatedData={generatedData} />
                     </TabsContent>
                 </Tabs>
             </div>
