@@ -4,10 +4,10 @@ const API_Base_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/a
 
 const api = axios.create({
     baseURL: API_Base_URL,
+    withCredentials: true,
     headers: {
         "Content-Type": "application/json",
     },
-    withCredentials: true, // Send cookies with requests
 });
 
 export default api;
@@ -24,4 +24,15 @@ export const authApi = {
 
     // Google
     googleLogin: (token: string) => api.post("/auth/google", { token }),
+
+    // User
+    getMe: () => api.get("/auth/me"),
+
+    // Logout
+    logout: () => api.post("/auth/logout"),
+
+    // Problems
+    createProblem: (data: any) => api.post("/problems", data),
+    getProblems: () => api.get("/problems"),
+    deleteProblem: (id: string) => api.delete(`/problems/${id}`),
 };

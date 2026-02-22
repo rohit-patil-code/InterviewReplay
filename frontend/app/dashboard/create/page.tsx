@@ -11,7 +11,6 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -32,7 +31,9 @@ import {
   Eye,
 } from "lucide-react";
 import TextareaAutosize from "react-textarea-autosize";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useRouter } from "next/navigation";
+import { authApi } from "@/lib/api";
 
 // --- Sub-Component: The Input Form (Left Side) ---
 function ConfigurationPanel({
@@ -89,7 +90,6 @@ function ConfigurationPanel({
   }
 
   return (
-    // FIX HERE: Added "overflow-hidden" to force the ScrollArea to be contained
     <div className="flex flex-col h-full relative overflow-hidden">
       {error && (
         <Alert variant="destructive" className="max-w-md mt-4">
@@ -215,7 +215,15 @@ function ConfigurationPanel({
 }
 
 // --- Sub-Component: The Preview (Right Side) ---
-function PreviewPanel({ generatedData }: { generatedData: any }) {
+function PreviewPanel({
+  generatedData,
+  onSave,
+  isSaving,
+}: {
+  generatedData: any;
+  onSave: () => void;
+  isSaving: boolean;
+}) {
   const cleanText = (value?: string) =>
     (value ?? "")
       .replace(/```/g, "")
@@ -292,9 +300,22 @@ function PreviewPanel({ generatedData }: { generatedData: any }) {
             Live Preview
           </span>
         </div>
-        <Button variant="secondary" size="sm" className="gap-2">
-          <Save className="h-4 w-4" />
-          Save to Dashboard
+        <Button
+          variant="secondary"
+          size="sm"
+          className="gap-2"
+          onClick={onSave}
+          disabled={isSaving}
+        >
+          {isSaving ? (
+            <>
+              <Wand2 className="h-4 w-4 animate-spin" /> Saving...
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4" /> Save to Dashboard
+            </>
+          )}
         </Button>
       </div>
 
@@ -400,9 +421,32 @@ export default function CreateProblemPage() {
   });
 
   const [generatedData, setGeneratedData] = useState<any>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const router = useRouter();
 
   const handleGenerateSuccess = (data: any) => {
     setGeneratedData(data);
+  };
+
+  const handleSave = async () => {
+    if (!generatedData) return;
+    setIsSaving(true);
+    try {
+      await authApi.createProblem({
+        title: generatedData.title,
+        company: generatedData.company || formData.company,
+        difficulty: generatedData.difficulty || formData.difficulty,
+        original_input: formData,
+        ai_output: generatedData,
+      });
+      // Redirect to dashboard or show success
+      router.push('/dashboard');
+    } catch (error) {
+      console.error("Failed to save problem:", error);
+      alert("Failed to save problem. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -422,7 +466,11 @@ export default function CreateProblemPage() {
           </ResizablePanel>
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={60}>
-            <PreviewPanel generatedData={generatedData} />
+            <PreviewPanel
+              generatedData={generatedData}
+              onSave={handleSave}
+              isSaving={isSaving}
+            />
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>
@@ -453,7 +501,11 @@ export default function CreateProblemPage() {
             value="preview"
             className="flex-1 mt-0 overflow-hidden bg-muted/10"
           >
-            <PreviewPanel generatedData={generatedData} />
+            <PreviewPanel
+              generatedData={generatedData}
+              onSave={handleSave}
+              isSaving={isSaving}
+            />
           </TabsContent>
         </Tabs>
       </div>

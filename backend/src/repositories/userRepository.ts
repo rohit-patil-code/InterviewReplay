@@ -16,6 +16,11 @@ export const findByEmail = async (email: string): Promise<User | null> => {
     return result.rows[0] || null;
 };
 
+export const findById = async (id: string): Promise<User | null> => {
+    const result = await query('SELECT * FROM users WHERE id = $1', [id]);
+    return result.rows[0] || null;
+};
+
 export const create = async (email: string, firstName?: string, lastName?: string, googleId?: string): Promise<User> => {
     const result = await query(
         'INSERT INTO users (email, first_name, last_name, google_id, is_verified) VALUES ($1, $2, $3, $4, $5) RETURNING *',

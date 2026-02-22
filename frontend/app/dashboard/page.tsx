@@ -1,3 +1,5 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +12,17 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -29,63 +42,75 @@ import {
     PlayCircle,
     Pencil,
     Trash2,
-    FileQuestion
+    FileQuestion,
+    Loader2
 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { authApi } from "@/lib/api";
+import { formatDistanceToNow } from "date-fns";
 
-// Mock Data
-const MOCK_PROBLEMS = [
-    {
-        id: "1",
-        status: "solved",
-        title: "Maximize Grid Value with K-Steps",
-        company: "Amazon",
-        difficulty: "Hard",
-        lastPracticed: "2 days ago",
-    },
-    {
-        id: "2",
-        status: "draft",
-        title: "String Compression III",
-        company: "Google",
-        difficulty: "Medium",
-        lastPracticed: "5 hours ago",
-    },
-    {
-        id: "3",
-        status: "failed",
-        title: "Graph Coloring Validation",
-        company: "Meta",
-        difficulty: "Medium",
-        lastPracticed: "1 week ago",
-    },
-    {
-        id: "4",
-        status: "solved",
-        title: "Two Sum with Twist",
-        company: "Uber",
-        difficulty: "Easy",
-        lastPracticed: "1 month ago",
-    },
-    {
-        id: "5",
-        status: "draft",
-        title: "Server Load Balancer Simulation",
-        company: "TikTok",
-        difficulty: "Hard",
-        lastPracticed: "Just now",
-    },
-];
+interface Problem {
+    id: string;
+    title: string;
+    company: string;
+    difficulty: string;
+    status?: string; // Optional for now as DB might not have it yet
+    created_at: string;
+}
 
 const DifficultyBadge = ({ level }: { level: string }) => {
     const colors: Record<string, string> = {
-        Easy: "bg-green-500/10 text-green-500 hover:bg-green-500/20 border-green-500/20",
-        Medium: "bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 border-yellow-500/20",
-        Hard: "bg-red-500/10 text-red-500 hover:bg-red-500/20 border-red-500/20",
+        easy: "bg-green-500/10 text-green-500 hover:bg-green-500/20 border-green-500/20",
+        medium: "bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 border-yellow-500/20",
+        hard: "bg-red-500/10 text-red-500 hover:bg-red-500/20 border-red-500/20",
     };
-    return <Badge variant="outline" className={colors[level]}>{level}</Badge>;
+    // Fallback for case sensitivity or unknown levels
+    const colorClass = colors[level.toLowerCase()] || colors["medium"];
+    return <Badge variant="outline" className={colorClass}>{level}</Badge>;
 };
 
 export default function DashboardPage() {
+    const [problems, setProblems] = useState<Problem[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [problemToDelete, setProblemToDelete] = useState<string | null>(null);
+
+    const fetchProblems = async () => {
+        try {
+            const response = await authApi.getProblems();
+            setProblems(response.data.problems);
+        } catch (error) {
+            console.error("Failed to fetch problems:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchProblems();
+    }, []);
+
+    const handleDelete = async () => {
+        if (!problemToDelete) return;
+
+        try {
+            await authApi.deleteProblem(problemToDelete);
+            // Refresh the list
+            await fetchProblems();
+        } catch (error) {
+            console.error("Failed to delete problem:", error);
+        } finally {
+            setProblemToDelete(null); // Close dialog
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex h-[50vh] items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
@@ -97,7 +122,7 @@ export default function DashboardPage() {
                         Manage, practice, and track your reconstructed interviews.
                     </p>
                 </div>
-                <Button className="font-semibold shadow-lg shadow-primary/20">
+                <Button className="font-semibold shadow-lg shadow-primary/20" asChild>
                     <Link href="/dashboard/create">
                         Recall New Problem
                     </Link>
@@ -132,13 +157,13 @@ export default function DashboardPage() {
                             <TableHead >Problem Name</TableHead>
                             <TableHead>Company</TableHead>
                             <TableHead>Difficulty</TableHead>
-                            <TableHead>Last Practiced</TableHead>
+                            <TableHead>Created</TableHead>
                             <TableHead >Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {MOCK_PROBLEMS.length > 0 ? (
-                            MOCK_PROBLEMS.map((problem) => (
+                        {problems.length > 0 ? (
+                            problems.map((problem) => (
                                 <TableRow key={problem.id} className="hover:bg-muted/30 border-border/50 group cursor-pointer transition-colors">
                                     <TableCell>
                                         <div className="font-semibold text-foreground group-hover:text-primary transition-colors">
@@ -152,30 +177,50 @@ export default function DashboardPage() {
                                         <DifficultyBadge level={problem.difficulty} />
                                     </TableCell>
                                     <TableCell className="text-muted-foreground text-sm">
-                                        {problem.lastPracticed}
+                                        {formatDistanceToNow(new Date(problem.created_at), { addSuffix: true })}
                                     </TableCell>
                                     <TableCell>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <span className="sr-only">Open menu</span>
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem className="gap-2 cursor-pointer">
-                                                    <PlayCircle className="h-4 w-4 text-green-500" /> Practice
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem className="gap-2 cursor-pointer">
-                                                    <Pencil className="h-4 w-4" /> Edit Details
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem className="gap-2 text-red-500 focus:text-red-500 cursor-pointer">
-                                                    <Trash2 className="h-4 w-4" /> Delete
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                                        <AlertDialog open={problemToDelete === problem.id} onOpenChange={(isOpen: boolean) => !isOpen && setProblemToDelete(null)}>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                        <span className="sr-only">Open menu</span>
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                    <DropdownMenuItem className="gap-2 cursor-pointer">
+                                                        <PlayCircle className="h-4 w-4 text-green-500" /> Practice
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem className="gap-2 cursor-pointer">
+                                                        <Pencil className="h-4 w-4" /> Edit Details
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                        className="gap-2 text-red-500 focus:text-red-500 cursor-pointer"
+                                                        onClick={() => setProblemToDelete(problem.id)}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" /> Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        This action cannot be undone. This will permanently delete your problem record from our servers.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 focus:ring-red-500">
+                                                        Continue
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
                                     </TableCell>
                                 </TableRow>
                             ))
@@ -188,8 +233,10 @@ export default function DashboardPage() {
                                         </div>
                                         <p className="text-lg font-medium">No problems found</p>
                                         <p className="text-sm mb-4">You haven't reconstructed any problems yet.</p>
-                                        <Button variant="outline" className="gap-2">
-                                            <Plus className="h-4 w-4" /> Recall Problem
+                                        <Button variant="outline" className="gap-2" asChild>
+                                            <Link href="/dashboard/create">
+                                                <Plus className="h-4 w-4" /> Recall Problem
+                                            </Link>
                                         </Button>
                                     </div>
                                 </TableCell>

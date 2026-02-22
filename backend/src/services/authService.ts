@@ -4,20 +4,12 @@ import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
 import * as otpRepository from '../repositories/otpRepository';
 import * as userRepository from '../repositories/userRepository';
+import { AuthError } from '../utils/errors';
 
 // types
 export interface AuthResult {
     user: any;
     token: string;
-}
-
-// errors
-export class AuthError extends Error {
-    statusCode: number;
-    constructor(message: string, statusCode: number = 401) {
-        super(message);
-        this.statusCode = statusCode;
-    }
 }
 
 // Configuration

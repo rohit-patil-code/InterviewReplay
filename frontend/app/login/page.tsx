@@ -56,6 +56,7 @@ export default function LoginPage() {
             await authApi.loginSendOtp(email);
             setStep("OTP");
         } catch (err: any) {
+            console.log("FULL ERROR:", err.response?.data);
             setError(err.response?.data?.error?.userId?._errors?.[0] || err.response?.data?.error?.email?._errors?.[0] || err.response?.data?.message || "Failed to send OTP. Please try again.");
             // Also check for raw messages if formatted differently
             if (err.response?.data?.error && typeof err.response.data.error === 'string') {
