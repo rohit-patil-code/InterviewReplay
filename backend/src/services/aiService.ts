@@ -1,11 +1,11 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Cerebras from "@cerebras/cerebras_cloud_sdk";
 import { ProblemSchema, ProblemData } from "../validations/problem";
 
-if (!process.env.GOOGLE_API_KEY) {
-    throw new Error("GOOGLE_API_KEY is not defined in environment variables");
+if (!process.env.CEREBRAS_API_KEY) {
+    throw new Error("CEREBRAS_API_KEY is not defined in environment variables");
 }
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+const client = new Cerebras({ apiKey: process.env.CEREBRAS_API_KEY });
 
 interface GenerateProblemInput {
     memory: string;
@@ -16,8 +16,7 @@ interface GenerateProblemInput {
 export const generateProblem = async (input: GenerateProblemInput): Promise<ProblemData> => {
     const { memory, difficulty, company } = input;
 
-    const systemPrompt = `
-You are an expert "LeetCode Problem Architect".
+    const systemPrompt = `You are an expert "LeetCode Problem Architect".
 Your goal is to take a user's messy, vague, or incomplete notes about a coding interview question they faced and reconstruct it into a polished, formal problem statement.
 
 You MUST output ONLY valid JSON with NO markdown code blocks, NO extra text, and NO commentary. The JSON must have exactly this structure:
@@ -47,18 +46,21 @@ Rules:
 
 Input Context:
 - Difficulty Estimate: ${difficulty || "Unknown"}
-- Company: ${company || "Unknown"}
-`;
+- Company: ${company || "Unknown"}`;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+    const start = performance.now();
+    const chatCompletion = await client.chat.completions.create({
+        messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: memory }
+        ],
+        model: "llama3.1-8b",
+        service_tier: "flex",
+    });
+    const end = performance.now();
+    console.log(`Time taken (AI generation): ${end - start}ms`);
 
-    const completion = await model.generateContent([
-        {
-            text: systemPrompt + `\n\nHere are my notes:\n\n${memory}`,
-        },
-    ]);
-
-    const rawContent = completion.response.text();
+    const rawContent = (chatCompletion as any).choices[0]?.message?.content;
 
     if (!rawContent) {
         throw new Error("No content received from AI");

@@ -353,7 +353,7 @@ function PreviewPanel({
                     <span className="text-xs font-medium text-muted-foreground uppercase">
                       Example {idx + 1}
                     </span>
-                    <div className="bg-background/50 p-3 rounded text-sm font-mono">
+                    <div className="bg-background/50 p-3 rounded text-sm font-mono my-2">
                       <div>
                         <strong>Input:</strong> {cleanText(example.input)}
                       </div>

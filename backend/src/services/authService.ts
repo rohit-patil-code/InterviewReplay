@@ -147,18 +147,22 @@ export const loginVerifyOtp = async (email: string, otp: string): Promise<AuthRe
 // GOOGLE AUTH
 // ==========================================
 
-export const verifyGoogleToken = async (token: string): Promise<AuthResult> => {
-    let ticket;
+export const verifyGoogleToken = async (accessToken: string): Promise<AuthResult> => {
+    let payload;
     try {
-        ticket = await googleClient.verifyIdToken({
-            idToken: token,
-            audience: GOOGLE_CLIENT_ID,
+        const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${accessToken}` }
         });
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch user info from Google');
+        }
+
+        payload = await response.json();
     } catch (error) {
-        throw new AuthError("Invalid Google Token");
+        throw new AuthError("Invalid Google Access Token");
     }
 
-    const payload = ticket.getPayload();
     if (!payload || !payload.email) {
         throw new AuthError("Invalid Google Token Payload");
     }

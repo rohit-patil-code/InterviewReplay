@@ -9,6 +9,7 @@ import { Loader2, Mail, ArrowRight, ArrowLeft, CheckCircle2 } from "lucide-react
 import { useRouter } from "next/navigation";
 import { authApi } from "@/lib/api";
 import { OTPInput } from "@/components/ui/otp-input";
+import { useGoogleLogin } from "@react-oauth/google";
 
 function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
     return (
@@ -43,10 +44,24 @@ export default function LoginPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState("");
 
-    const handleGoogleLogin = () => {
-        // Placeholder for Google Login Logic
-        console.log("Google Login Clicked");
-    };
+    const loginWithGoogle = useGoogleLogin({
+        onSuccess: async (tokenResponse) => {
+            setError("");
+            startGoogleTransition(async () => {
+                try {
+                    // Send access_token instead of credential
+                    await authApi.googleLogin(tokenResponse.access_token);
+                    router.push("/dashboard");
+                } catch (err: any) {
+                    console.error("Google login API error:", err);
+                    setError(err.response?.data?.message || err.response?.data?.error || "Google sign-in failed on our servers.");
+                }
+            });
+        },
+        onError: () => {
+            setError("Google sign-in failed or was cancelled.");
+        }
+    });
 
     const handleSendOtp = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -104,7 +119,7 @@ export default function LoginPage() {
                     <Button
                         variant="outline"
                         className="w-full h-11 relative"
-                        onClick={handleGoogleLogin}
+                        onClick={() => loginWithGoogle()}
                         disabled={isGoogleLoading || isLoading}
                     >
                         {isGoogleLoading ? (

@@ -177,7 +177,7 @@ export default function DashboardPage() {
                                         <DifficultyBadge level={problem.difficulty} />
                                     </TableCell>
                                     <TableCell className="text-muted-foreground text-sm">
-                                        {formatDistanceToNow(new Date(problem.created_at), { addSuffix: true })}
+                                        {formatDistanceToNow(new Date(problem.created_at), { addSuffix: true }).replace("about ", "")}
                                     </TableCell>
                                     <TableCell>
                                         <AlertDialog open={problemToDelete === problem.id} onOpenChange={(isOpen: boolean) => !isOpen && setProblemToDelete(null)}>
