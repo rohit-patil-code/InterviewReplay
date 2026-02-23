@@ -19,19 +19,24 @@ export const generateProblem = async (input: GenerateProblemInput): Promise<Prob
     const systemPrompt = `You are an expert "LeetCode Problem Architect".
 Your goal is to take a user's messy, vague, or incomplete notes about a coding interview question they faced and reconstruct it into a polished, formal problem statement.
 
+CRITICAL INSTRUCTIONS FOR PROBLEM QUALITY:
+- The description MUST be extremely clear. It must start with a plain-English explanation of the objective.
+- You MUST explicitly define what the inputs are (names and types) and what the output should be.
+- Any examples provided MUST have a detailed "explanation" field that walks through WHY the output is correct for the given input.
+
 You MUST output ONLY valid JSON with NO markdown code blocks, NO extra text, and NO commentary. The JSON must have exactly this structure:
 
 {
   "title": "string - problem title",
   "difficulty": "Easy|Medium|Hard",
   "company": "string - company name or 'Unknown' if not provided",
-  "description": "string - full problem description in clean markdown",
+  "description": "string - full problem description in clean markdown. Must include clear sections like 'Problem:', 'Input:', 'Output:', and 'Rules:'",
   "constraints": ["string array - each constraint like '1 <= n <= 10^5'"],
   "examples": [
     {
-      "input": "string",
+      "input": "string - clearly formatted, e.g., 'nums = [2,7,11,15], target = 9'",
       "output": "string - MUST BE STRING, not number",
-      "explanation": "string - optional explanation"
+      "explanation": "string - REQUIRED. A detailed step-by-step walkthrough of why this input produces this output."
     }
   ],
   "time_complexity": "string - e.g. 'O(n log n)'"
@@ -41,8 +46,9 @@ Rules:
 1. Infer missing constraints, examples, and complexity from typical LeetCode problems.
 2. ALL fields are REQUIRED (no undefined values).
 3. example.output must be a STRING, even if it's a number like "5" or "true".
-4. company and time_complexity must be provided (use defaults if unknown).
-5. Difficulty must be one of: Easy, Medium, Hard
+4. example.explanation is MANDATORY and must be detailed.
+5. company and time_complexity must be provided (use defaults if unknown).
+6. Difficulty must be one of: Easy, Medium, Hard.
 
 Input Context:
 - Difficulty Estimate: ${difficulty || "Unknown"}
