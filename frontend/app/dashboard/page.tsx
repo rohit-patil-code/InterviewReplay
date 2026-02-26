@@ -48,6 +48,7 @@ import {
 import { useEffect, useState } from "react";
 import { authApi } from "@/lib/api";
 import { formatDistanceToNow } from "date-fns";
+import { useRouter } from "next/navigation";
 
 interface Problem {
     id: string;
@@ -73,6 +74,7 @@ export default function DashboardPage() {
     const [problems, setProblems] = useState<Problem[]>([]);
     const [loading, setLoading] = useState(true);
     const [problemToDelete, setProblemToDelete] = useState<string | null>(null);
+    const router = useRouter();
 
     const fetchProblems = async () => {
         try {
@@ -164,7 +166,11 @@ export default function DashboardPage() {
                     <TableBody>
                         {problems.length > 0 ? (
                             problems.map((problem) => (
-                                <TableRow key={problem.id} className="hover:bg-muted/30 border-border/50 group cursor-pointer transition-colors">
+                                <TableRow
+                                    key={problem.id}
+                                    className="hover:bg-muted/30 border-border/50 group cursor-pointer transition-colors"
+                                    onClick={() => router.push(`/practice/${problem.id}`)}
+                                >
                                     <TableCell>
                                         <div className="font-semibold text-foreground group-hover:text-primary transition-colors">
                                             {problem.title}
@@ -183,30 +189,37 @@ export default function DashboardPage() {
                                         <AlertDialog open={problemToDelete === problem.id} onOpenChange={(isOpen: boolean) => !isOpen && setProblemToDelete(null)}>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                    <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
                                                         <span className="sr-only">Open menu</span>
                                                         <MoreHorizontal className="h-4 w-4" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
+                                                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                    <DropdownMenuItem className="gap-2 cursor-pointer">
-                                                        <PlayCircle className="h-4 w-4 text-green-500" /> Practice
+                                                    <DropdownMenuItem className="gap-2 cursor-pointer" asChild>
+                                                        <Link href={`/practice/${problem.id}`}>
+                                                            <PlayCircle className="h-4 w-4 text-green-500" /> Practice
+                                                        </Link>
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem className="gap-2 cursor-pointer">
-                                                        <Pencil className="h-4 w-4" /> Edit Details
+                                                    <DropdownMenuItem className="gap-2 cursor-pointer" asChild>
+                                                        <Link href={`/dashboard/create?edit=${problem.id}`}>
+                                                            <Pencil className="h-4 w-4" /> Edit Details
+                                                        </Link>
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem
                                                         className="gap-2 text-red-500 focus:text-red-500 cursor-pointer"
-                                                        onClick={() => setProblemToDelete(problem.id)}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setProblemToDelete(problem.id);
+                                                        }}
                                                     >
                                                         <Trash2 className="h-4 w-4" /> Delete
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
 
-                                            <AlertDialogContent>
+                                            <AlertDialogContent onClick={(e) => e.stopPropagation()}>
                                                 <AlertDialogHeader>
                                                     <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                                     <AlertDialogDescription>
@@ -214,8 +227,11 @@ export default function DashboardPage() {
                                                     </AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                    <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 focus:ring-red-500">
+                                                    <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDelete();
+                                                    }} className="bg-red-500 hover:bg-red-600 focus:ring-red-500">
                                                         Continue
                                                     </AlertDialogAction>
                                                 </AlertDialogFooter>

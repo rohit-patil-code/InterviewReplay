@@ -9,6 +9,8 @@ router.use(requireAuth);
 
 router.post('/', problemController.createProblem);
 router.get('/', problemController.getMyProblems);
+router.get('/:id', problemController.getProblem);
+router.put('/:id', problemController.updateProblem);
 router.delete('/:id', problemController.deleteProblem);
 
 export default router;

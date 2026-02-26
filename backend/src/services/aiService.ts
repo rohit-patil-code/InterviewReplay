@@ -23,6 +23,7 @@ CRITICAL INSTRUCTIONS FOR PROBLEM QUALITY:
 - The description MUST be extremely clear. It must start with a plain-English explanation of the objective.
 - You MUST explicitly define what the inputs are (names and types) and what the output should be.
 - Any examples provided MUST have a detailed "explanation" field that walks through WHY the output is correct for the given input.
+- STRICT RULE ON EXPLANATIONS: Explanations must ONLY demonstrate how the input maps to the output manually. DO NOT reveal the optimal algorithm, data structures, approach, or solution to the user in the explanation or description. This is a practice problem, do not spoil it.
 
 You MUST output ONLY valid JSON with NO markdown code blocks, NO extra text, and NO commentary. The JSON must have exactly this structure:
 
@@ -36,7 +37,7 @@ You MUST output ONLY valid JSON with NO markdown code blocks, NO extra text, and
     {
       "input": "string - clearly formatted, e.g., 'nums = [2,7,11,15], target = 9'",
       "output": "string - MUST BE STRING, not number",
-      "explanation": "string - REQUIRED. A detailed step-by-step walkthrough of why this input produces this output."
+      "explanation": "string - REQUIRED. A detailed step-by-step walkthrough of why this input produces this output. DO NOT REVEAL THE SOLUTION/ALGORITHM HERE."
     }
   ],
   "time_complexity": "string - e.g. 'O(n log n)'"
@@ -46,7 +47,7 @@ Rules:
 1. Infer missing constraints, examples, and complexity from typical LeetCode problems.
 2. ALL fields are REQUIRED (no undefined values).
 3. example.output must be a STRING, even if it's a number like "5" or "true".
-4. example.explanation is MANDATORY and must be detailed.
+4. example.explanation is MANDATORY and must be detailed, but MUST NOT reveal the algorithm or approach.
 5. company and time_complexity must be provided (use defaults if unknown).
 6. Difficulty must be one of: Easy, Medium, Hard.
 

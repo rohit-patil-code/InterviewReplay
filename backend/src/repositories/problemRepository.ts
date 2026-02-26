@@ -34,3 +34,31 @@ export const deleteProblem = async (problemId: string, userId: string): Promise<
     );
     return result.rowCount !== null && result.rowCount > 0;
 };
+
+export const getProblemById = async (problemId: string, userId: string): Promise<Problem | null> => {
+    const result = await pool.query(
+        `SELECT * FROM problems WHERE id = $1 AND user_id = $2`,
+        [problemId, userId]
+    );
+    return result.rows.length ? result.rows[0] : null;
+};
+
+export const updateProblem = async (
+    problemId: string,
+    userId: string,
+    title: string,
+    company: string,
+    difficulty: string,
+    originalInput: any,
+    aiOutput: any
+): Promise<Problem | null> => {
+    const result = await pool.query(
+        `UPDATE problems 
+         SET title = $1, company = $2, difficulty = $3, original_input = $4, ai_output = $5, updated_at = NOW()
+         WHERE id = $6 AND user_id = $7
+         RETURNING *`,
+        [title, company, difficulty, originalInput, aiOutput, problemId, userId]
+    );
+    return result.rows.length ? result.rows[0] : null;
+};
+

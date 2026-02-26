@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -32,18 +32,19 @@ import {
 } from "lucide-react";
 import TextareaAutosize from "react-textarea-autosize";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { authApi } from "@/lib/api";
 
-// --- Sub-Component: The Input Form (Left Side) ---
 function ConfigurationPanel({
   data,
   setData,
   onGenerateSuccess,
+  isEditMode,
 }: {
   data: any;
   setData: any;
   onGenerateSuccess: (data: any) => void;
+  isEditMode?: boolean;
 }) {
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +104,7 @@ function ConfigurationPanel({
           {/* Header */}
           <div>
             <h2 className="text-xl font-semibold tracking-tight">
-              Define Problem
+              {isEditMode ? "Edit Problem" : "Define Problem"}
             </h2>
             <p className="text-sm text-muted-foreground">
               Provide context to help the AI reconstruct your memory.
@@ -219,10 +220,12 @@ function PreviewPanel({
   generatedData,
   onSave,
   isSaving,
+  isEditMode,
 }: {
   generatedData: any;
   onSave: () => void;
   isSaving: boolean;
+  isEditMode?: boolean;
 }) {
   const cleanText = (value?: string) =>
     (value ?? "")
@@ -246,7 +249,7 @@ function PreviewPanel({
           </div>
           <Button variant="secondary" size="sm" disabled className="gap-2">
             <Save className="h-4 w-4" />
-            Save to Dashboard
+            {isEditMode ? "Update Problem" : "Save to Dashboard"}
           </Button>
         </div>
 
@@ -313,7 +316,7 @@ function PreviewPanel({
             </>
           ) : (
             <>
-              <Save className="h-4 w-4" /> Save to Dashboard
+              <Save className="h-4 w-4" /> {isEditMode ? "Update Problem" : "Save to Dashboard"}
             </>
           )}
         </Button>
@@ -412,7 +415,7 @@ function PreviewPanel({
 }
 
 // --- MAIN PAGE COMPONENT ---
-export default function CreateProblemPage() {
+function CreateProblemContent() {
   const [formData, setFormData] = useState({
     title: "",
     company: "other",
@@ -423,6 +426,32 @@ export default function CreateProblemPage() {
   const [generatedData, setGeneratedData] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("edit");
+  const isEditMode = !!editId;
+
+  useEffect(() => {
+    if (editId) {
+      authApi.getProblem(editId)
+        .then((res) => {
+          const problem = res.data.problem;
+          if (problem.original_input) {
+            setFormData(problem.original_input);
+          } else {
+            setFormData({
+              title: problem.title,
+              company: problem.company,
+              difficulty: problem.difficulty,
+              description: "",
+            });
+          }
+          if (problem.ai_output) {
+            setGeneratedData(problem.ai_output);
+          }
+        })
+        .catch((err) => console.error("Failed to load problem structure:", err));
+    }
+  }, [editId]);
 
   const handleGenerateSuccess = (data: any) => {
     setGeneratedData(data);
@@ -432,13 +461,19 @@ export default function CreateProblemPage() {
     if (!generatedData) return;
     setIsSaving(true);
     try {
-      await authApi.createProblem({
+      const payload = {
         title: generatedData.title,
         company: generatedData.company || formData.company,
         difficulty: generatedData.difficulty || formData.difficulty,
         original_input: formData,
         ai_output: generatedData,
-      });
+      };
+
+      if (isEditMode) {
+        await authApi.updateProblem(editId, payload);
+      } else {
+        await authApi.createProblem(payload);
+      }
       // Redirect to dashboard or show success
       router.push('/dashboard');
     } catch (error) {
@@ -462,6 +497,7 @@ export default function CreateProblemPage() {
               data={formData}
               setData={setFormData}
               onGenerateSuccess={handleGenerateSuccess}
+              isEditMode={isEditMode}
             />
           </ResizablePanel>
           <ResizableHandle withHandle />
@@ -470,6 +506,7 @@ export default function CreateProblemPage() {
               generatedData={generatedData}
               onSave={handleSave}
               isSaving={isSaving}
+              isEditMode={isEditMode}
             />
           </ResizablePanel>
         </ResizablePanelGroup>
@@ -495,6 +532,7 @@ export default function CreateProblemPage() {
               data={formData}
               setData={setFormData}
               onGenerateSuccess={handleGenerateSuccess}
+              isEditMode={isEditMode}
             />
           </TabsContent>
           <TabsContent
@@ -505,10 +543,19 @@ export default function CreateProblemPage() {
               generatedData={generatedData}
               onSave={handleSave}
               isSaving={isSaving}
+              isEditMode={isEditMode}
             />
           </TabsContent>
         </Tabs>
       </div>
     </div>
+  );
+}
+
+export default function CreateProblemPage() {
+  return (
+    <Suspense fallback={<div className="flex h-full items-center justify-center p-8 text-muted-foreground">Loading problem details...</div>}>
+      <CreateProblemContent />
+    </Suspense>
   );
 }
