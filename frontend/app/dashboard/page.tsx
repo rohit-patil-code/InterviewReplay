@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import useSWR from "swr";
 import {
     Table,
     TableBody,
@@ -45,7 +46,7 @@ import {
     FileQuestion,
     Loader2
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { authApi } from "@/lib/api";
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
@@ -70,26 +71,20 @@ const DifficultyBadge = ({ level }: { level: string }) => {
     return <Badge variant="outline" className={colorClass}>{level}</Badge>;
 };
 
+const fetcher = async () => {
+    const response = await authApi.getProblems();
+    return response.data.problems as Problem[];
+};
+
 export default function DashboardPage() {
-    const [problems, setProblems] = useState<Problem[]>([]);
-    const [loading, setLoading] = useState(true);
     const [problemToDelete, setProblemToDelete] = useState<string | null>(null);
     const router = useRouter();
 
-    const fetchProblems = async () => {
-        try {
-            const response = await authApi.getProblems();
-            setProblems(response.data.problems);
-        } catch (error) {
-            console.error("Failed to fetch problems:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchProblems();
-    }, []);
+    const { data: problems = [], isLoading: loading, mutate } = useSWR<Problem[]>(
+        "problems",
+        fetcher,
+        { refreshInterval: 3000 }
+    );
 
     const handleDelete = async () => {
         if (!problemToDelete) return;
@@ -97,7 +92,7 @@ export default function DashboardPage() {
         try {
             await authApi.deleteProblem(problemToDelete);
             // Refresh the list
-            await fetchProblems();
+            await mutate();
         } catch (error) {
             console.error("Failed to delete problem:", error);
         } finally {
@@ -159,6 +154,7 @@ export default function DashboardPage() {
                             <TableHead >Problem Name</TableHead>
                             <TableHead>Company</TableHead>
                             <TableHead>Difficulty</TableHead>
+                            <TableHead>Test Cases</TableHead>
                             <TableHead>Created</TableHead>
                             <TableHead >Actions</TableHead>
                         </TableRow>
@@ -181,6 +177,15 @@ export default function DashboardPage() {
                                     </TableCell>
                                     <TableCell>
                                         <DifficultyBadge level={problem.difficulty} />
+                                    </TableCell>
+                                    <TableCell>
+                                        {problem.status === 'processing' ? (
+                                            <Badge variant="secondary" className="animate-pulse bg-secondary/50 text-muted-foreground">Processing...</Badge>
+                                        ) : problem.status === 'generated' ? (
+                                            <Badge className="bg-green-500/10 text-green-500 hover:bg-green-500/20 shadow-none border-green-500/20 border">Generated</Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="opacity-50 text-muted-foreground">{problem.status || 'Pending'}</Badge>
+                                        )}
                                     </TableCell>
                                     <TableCell className="text-muted-foreground text-sm">
                                         {formatDistanceToNow(new Date(problem.created_at), { addSuffix: true }).replace("about ", "")}
@@ -264,3 +269,4 @@ export default function DashboardPage() {
         </div>
     );
 }
+
