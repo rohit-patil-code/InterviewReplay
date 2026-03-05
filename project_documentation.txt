@@ -1,0 +1,283 @@
+====================================================
+1. PROJECT OVERVIEW
+====================================================
+- Project Name: InterviewReplay (also referred to as oa-recall)
+- Description: A comprehensive technical interview preparation and code execution platform. It allows users to practice algorithmic problems, while utilizing a powerful AI-driven backend engine to procedurally generate valid, massive test cases to simulate realistic execution constraints (e.g., Time Limit Exceeded / TLE testing).
+- Vision: To provide a next-generation coding practice environment that autonomously understands problem constraints, scales test cases reliably using AI schema mapping, and grades candidate code accurately in a simulated production environment.
+- Target Users: Software Engineers, Job Seekers, Coding Bootcamp Students, and Interview Candidates looking for rigorous algorithmic practice.
+- Core Features:
+  - User Authentication: Secure Email OTP and Google OAuth verification.
+  - Practice Dashboard: Specialized coding arenas equipped with Monaco Editor for multiple languages.
+  - AI Test Case Generation: Intelligent generation of trick/edge cases and mathematical generation schemas via Gemini AI.
+  - Background Processing: BullMQ workers handling heavy, asynchronous code execution and deterministic test generation.
+  - Cloud Storage: Integration with AWS S3 for hosting millions of lines of test data.
+- Business Logic Summary: 
+  A user accesses or creates a problem on the platform. The platform queues the problem configuration to a background worker. The worker communicates with Google Gemini to identify problem complexities and edge cases, mapping out a "schema" for valid inputs. Using this schema, the worker deterministically generates massive test cases (e.g., arrays of 100,000 integers) and simultaneously generates a solver script to compute the answers. These large I/O combinations are saved to AWS S3 and their metadata is linked to the PostgreSQL database. The user then submits their code which is validated against these exact hidden test cases.
+
+====================================================
+2. TECHNOLOGY STACK
+====================================================
+FRONTEND TECHNOLOGIES:
+- Next.js (v16.1.3): React framework utilized for App Router, server-side rendering, and efficient routing.
+- React (v19): Modern UI component library.
+- TailwindCSS (v4): Utility-first styling framework for UI standardization.
+- Radix UI: Headless, highly accessible UI components utilized for dialogs, tabs, dropdowns, and accords.
+- Monaco Editor: Powerful code editor interface embedded directly for realistic coding practice.
+- Recharts: Composable charting library to render performance graphs and progress analytics.
+- React Hook Form & Zod: For robust and type-safe front-end form validation.
+
+BACKEND TECHNOLOGIES:
+- Node.js & Express.js (v5.2.1): Core server environment and API routing architecture.
+- TypeScript: Strongly typed object-oriented backend structure.
+- Prisma / node-pg: Direct PostgreSQL bindings for raw efficiency and control.
+- Zod: Validation pipelines to secure API incoming request bodies.
+
+DATABASE & QUEUE:
+- PostgreSQL: Primary relational database containing users, problems, test case metadata, and OTP records.
+- Redis (ioredis): In-memory data store primarily serving as a fast queue management system for BullMQ.
+- BullMQ: Job queue handling background generation of inputs to isolate heavy loads from the main API thread.
+
+AUTHENTICATION:
+- JSON Web Tokens (JWT): Secure stateless session management natively stored via HttpOnly cookies.
+- bcrypt: Secure hashing algorithms for backend passwords/tokens.
+- Google OAuth (@react-oauth/google): Seamless third-party authentication integration.
+- SendGrid (@sendgrid/mail): For dispatching transactional emails and One Time Passcodes.
+
+AI / ML TOOLS:
+- Google Generative AI (@google/generative-ai): Leverages the "gemini-2.5-flash" model for fast, deterministic generation of math schemas and edge case identification.
+
+HOSTING / CLOUD / STORAGE:
+- AWS S3 (@aws-sdk/client-s3): Crucial for dumping exceptionally large `.txt` input/output files instead of bloating the relational database.
+- Supabase: PaaS provider utilized for remote PostgreSQL provisioning and occasional SSR.
+
+====================================================
+3. PROJECT FOLDER STRUCTURE (TREE VIEW)
+====================================================
+InterviewReplay/
+│
+├── frontend/                 # Client UI Application
+│   ├── app/                  # Next.js 13+ App Router mapping
+│   │   ├── auth/             # Authentication wrapper layouts
+│   │   ├── dashboard/        # Post-login user dashboard view
+│   │   ├── login/            # Sign-in UI
+│   │   ├── practice/         # Main coding environment and terminal UI
+│   │   ├── profile/          # User settings
+│   │   └── register/         # Sign-up UI
+│   ├── components/           # Reusable functional components (Radix UI pieces, inputs)
+│   ├── lib/                  # Frontend utilities, hooks, and external API connectors
+│   ├── public/               # Static assets, favicons, branding vectors
+│   ├── middleware.ts         # Edge middleware intercepting authenticated routes
+│   └── package.json          # Node dependency tracking
+│
+├── backend/                  # Server API Architecture
+│   ├── src/
+│   │   ├── config/           # Centralized environment variable parsing (DB/Redis)
+│   │   ├── controllers/      # Route logic handlers linking req/res to services
+│   │   ├── middlewares/      # Security layers (auth verification, input sanitization)
+│   │   ├── migrations/       # Sequential raw .sql migrations to structure Postgres tables
+│   │   ├── models/           # TypeScript definitions / Data mapping objects
+│   │   ├── repositories/     # Data Access Layer interfacing strictly with PostgreSQL
+│   │   ├── routes/           # Express router files (mapping URLs to Controllers)
+│   │   ├── scripts/          # System maintenance tools (e.g. migrate.ts)
+│   │   ├── services/         # Deep business logic (Auth, User, AI handling)
+│   │   ├── utils/            # Shared logical snippets and constants
+│   │   ├── validations/      # Zod validation schema objects
+│   │   ├── app.ts            # Core Express pipeline configuration
+│   │   ├── server.ts         # Network listener bind and server boot
+│   │   └── worker.mjs        # Daemonized BullMQ job thread for problem data processing
+│   ├── .env                  # Secret variable assignments
+│   └── package.json          # Server dependency definitions
+
+====================================================
+4. SYSTEM ARCHITECTURE
+====================================================
+- Architecture Pattern: The application strictly utilizes an N-Tier architecture merging a RESTful Monolithic API alongside an Asynchronous Micro-task background topology.
+- Data Flow: The frontend communicates to the backend through stateless REST APIs authenticated via JWT HttpOnly cookies. When complex jobs (like AI processing) are requested, the backend shifts the workload to a Redis/BullMQ background queue.
+- Request Lifecycle: Reaches standard entry point -> Validated via Zod -> Authenticated via Middleware -> Processed by Service Layer -> Mutates Data in PG Repository Layer -> Responds with JSON.
+- Component Interaction & Background Processing:
+  Heavy operations like 10,000-line test case generations will lock physical threads, hence node `worker.mjs` runs independently. The API triggers an event in Redis, the Worker executes Gemini, deterministically builds math structures, spawns temporary child Node.js scripts internally using `exec()`, assesses algorithm outputs, and uploads directly from the disk memory to AWS S3. 
+
+[ Architecture ASCII Diagram ]
+
+[ USER BROWSER ]
+      │
+      ▼
+[ NEXT.JS FRONTEND ] 
+      │ (JSON / REST API over HTTP/Cookies)
+      ▼
+[ EXPRESS.JS BACKEND ] ──(Sync Queries)──► [ POSTGRESQL DB ]
+      │
+      │ (Enqueues Job Event)
+      ▼
+[ REDIS QUEUE (BullMQ) ]
+      │
+      │ (Job Consumption)
+      ▼
+[ DEDICATED WORKER SCRIPT ] ──(Prompts)──► [ GEMINI AI ENGINE ]
+      │
+      │ (Uploads massive .txt files)
+      ▼
+[ AWS S3 STORAGE POOL ]
+
+
+====================================================
+5. SYSTEM FLOW (STEP-BY-STEP)
+====================================================
+USER AUTHENTICATION FLOW:
+1. User navigates to `/login` or `/register`.
+2. Selects traditional email input or Google OAuth.
+3. If Google: Hits Google servers, receives profile, backend verifies via Google Auth verification, provisions JWT.
+4. If Email: Requests login, backend inserts OTP to `email_otps` table and emails via Sendgrid.
+5. User enters OTP. Backend checks validity, provisions JWT HttpOnly cookie, marks `is_verified`.
+
+TEST CASE GENERATION FLOW (MAIN FEATURE SYSTEM):
+1. Admin/System invokes the route to initialize a problem generation.
+2. Express issues a job to `{test-case-generation}` queue containing the standard text problem description.
+3. API instantly returns a 202 Accepted, leaving the frontend unblocked to poll for status.
+4. BullMQ Worker dequeues the job.
+5. Step A: Worker prompts Gemini for 3 tricky edge cases derived from constraints and inserts into DB.
+6. Step B: Worker prompts Gemini for a math-oriented schema, strict parameter array (`order`), starter code signatures, and a deterministic Javascript `solution_script`.
+7. Step C: Worker parses generation schema. Uses loop 1 to 15 building arrays, matrices, string parameters procedurally up to memory constraints.
+8. Step D: Worker writes `input_1.txt` ... `input_15.txt`.
+9. Step E: Worker writes AI `temp_solver_id.js` to disk, executes it to read the local `inputs` and generate precise `outputs`.
+10. Step F: S3Client iterates over all 30 files, uploading them asynchronously to the AWS S3 Bucket.
+11. Step G: File URLs are mapped to `test_cases` inside PostgreSQL. DB status flips to `generated`. Job finishes.
+
+CODE EXECUTION FLOW (Validating User Code):
+1. User types in Monaco Editor and clicks Submit.
+2. The user code is sent along with `problem_id` to standard execution endpoint.
+3. The platform pulls `test_cases` records. Small cases are evaluated directly in memory.
+4. The larger TLE cases are fetched from S3.
+5. Results (Pass / Fail / Time Limit / Memory Limit) are aggregated and returned to the browser.
+
+====================================================
+6. DATABASE STRUCTURE
+====================================================
+- Database Type: Relational (PostgreSQL)
+- Schema/Migrations Management: Raw `.sql` sequential scripts
+
+[ ER ASCII Diagram ]
+
+USERS 1─────∞ PROBLEMS 1─────∞ TEST_CASES
+  │
+  └─∞ EMAIL_OTPS
+
+TABLES & FIELDS:
+1. [users]
+   - id: UUID (PK)
+   - email: VARCHAR(255) (UNIQUE)
+   - first_name: VARCHAR(100)
+   - last_name: VARCHAR(100)
+   - google_id: VARCHAR(255) (UNIQUE)
+   - is_verified: BOOLEAN
+   - created_at / updated_at: TIMESTAMP
+
+2. [email_otps]
+   - id: UUID (PK)
+   - user_id: UUID (REFERENCES users.id)
+   - otp_code: VARCHAR(6)
+   - expires_at: TIMESTAMP
+   - created_at: TIMESTAMP
+
+3. [problems]
+   - id: UUID (PK)
+   - user_id: UUID (REFERENCES users.id)
+   - title: TEXT
+   - company: TEXT
+   - difficulty: TEXT ('easy', 'medium', 'hard')
+   - status: TEXT (determines if generation is complete)
+   - starter_code: JSONB 
+   - solution_code: JSONB
+   - original_input: JSONB
+   - ai_output: JSONB
+   - created_at / updated_at: TIMESTAMP
+
+4. [test_cases]
+   - id: UUID (PK)
+   - problem_id: UUID (REFERENCES problems.id)
+   - type: ENUM ('standard', 'edge', 'large_tle')
+   - input_data: TEXT (Nullable for inline caching)
+   - expected_output: TEXT (Nullable for inline caching)
+   - input_file_url: VARCHAR(255) (S3 bucket link)
+   - output_file_url: VARCHAR(255) (S3 bucket link)
+   - is_hidden: BOOLEAN
+   - points_weight: INTEGER
+
+====================================================
+7. API STRUCTURE
+====================================================
+- Base URL: `http://localhost:<port>/api` (or staging domain prefix)
+
+ENDPOINTS & METHODS:
+[ AUTHENTICATION ]
+- POST `/api/auth/register`: Requires { email }, sends OTP.
+- POST `/api/auth/login`: Requires { email }, sends OTP.
+- POST `/api/auth/verify-otp`: Requires { email, otp_code }. Res: Sets JWT cookie.
+- POST `/api/auth/google`: Requires Google token integration sequence.
+- GET  `/api/auth/logout`: Clears existing HttpOnly cookie.
+
+[ USERS ]
+- GET `/api/profile/me`: Reads authenticated JWT, returns safe profile object map.
+
+[ GENERATION ]
+- POST `/api/generate/init`: Requires { problemId, description }. Inserts to Redis background queue.
+
+[ PROBLEMS ]
+- GET `/api/problems`: Fetches paginated problem list with titles, company, difficulty.
+- GET `/api/problems/:id`: Fetches strict problem overview, visible test cases, and starter code signatures.
+
+GENERAL MECHANISMS:
+- Middleware Usage: The `authMiddleware` reads `req.cookies.token`, verifying it against JWT Secret. Rejects 401 Unauthorized securely without parsing body parameters.
+- Response Structure: Strict `{ success: true/false, data?: any, message?: string }` wrapper formatting.
+
+====================================================
+8. SECURITY ARCHITECTURE
+====================================================
+- Authentication: Secure HTTP-Only, SameSite, Secure (if prod) cookies rendering XSS attacks ineffective against token theft. 
+- Encryption: Deep use of bcrypt for string hashing capabilities securely salting payloads.
+- Role-Based Access: Validation layer checking token metadata against table relations (User constraints).
+- Safe Code Injection Prevention: The Worker executes code inside isolated memory via temporary local `.js` files when simulating solver engines, removing risk of server hijacking during generative flows.
+- Object Relationship Security: Queries aggressively filter where `user_id = authUser.id` explicitly mitigating IDOR vulnerabilities.
+
+====================================================
+9. DEPLOYMENT STRUCTURE
+====================================================
+- Environments: Standard multi-tier separation (Local Dev / Build Staging / Production).
+- Node Runtime: Transformed utilizing `tsc` (TypeScript Compiler) compiling to optimized vanilla V8 `dist/` logic.
+- Containerization: Ideal architecture built capable for robust Docker isolation considering `worker.mjs` executes arbitrary child processes.
+- Redis Instance: Provisioned explicitly with TLS requirements for tunneling across isolated virtual private clouds to ensure strict caching reliability.
+- Cloud Hosting (Implied Target Strategy):
+  - Frontend: Vercel mapping Next.js API boundaries to Edge networks natively.
+  - Backend API: ECS / Railway provisioning container deployments scaling according to HTTP inbound requests.
+  - Background Worker Pool: Independent container architecture listening strictly to Redis instance events avoiding auto-scale web API conflictions.
+- Cloud Storage Providers: AWS S3 resolving large static assets (test cases) entirely detached from central PostgreSQL to avert vertical bottlenecking.
+
+====================================================
+10. PERFORMANCE OPTIMIZATION
+====================================================
+- Background Processing Queueing: API threads remain 100% unimpeded by dumping mathematically complex and external network loads (AI integration) onto an alternate asynchronous pipeline using BullMQ.
+- Hybrid Data Storage Mechanism: By detaching the `TEXT` blob data larger than minimal capacity into an AWS S3 bucket layer and retaining basic `VARCHAR` URLs directly inside the fast PostgreSQL records, DB row cache sizes stay micro-optimized resulting in split-millisecond indexing resolutions.
+- Lazy Evaluation: Node Worker skips recursive depth limits and explicitly maps parameters probabilistically scaling directly toward extreme limits mathematically rendering validation constraints rather than raw looping logic where possible.
+
+====================================================
+11. FUTURE SCALABILITY PLAN
+====================================================
+- Horizontal Scaling of Execution Workers: 
+  The BullMQ queuing abstraction makes scaling to infinity completely linear. If the platform is bombarded, we orchestrate arbitrary volumes of `worker_<id>` Docker pods seamlessly grabbing events simultaneously from the overarching Redis instance state.
+- Database Sharding / Migration: 
+  Migrating to read-replicas for pulling metadata while directing write operations solely toward a primary Postgres instance if usage peaks.
+- Sandbox Infrastructure: 
+  Currently the system `exec()` executes solution code. Standardized multi-tenant Kubernetes sandboxing layers, strict seccomp limitations or lightweight generalized Firecracker MicroVMs need implementation to process client submittals flawlessly.
+
+====================================================
+12. COMPLETE EXECUTION FLOW SUMMARY
+====================================================
+An end-to-end execution lifecycle in oa-recall runs seamlessly:
+
+[ ACTION ] => User interfaces via an aesthetically modern Next.js platform.
+[ PROCESSING ] => An express.js pipeline handles authorization via locked encryption tokens preventing unauthorized data parsing. 
+[ DELEGATION ] => When initiating complex algorithmic ingestion, raw input relies upon external AI intelligence linked with programmatic generation pipelines inside a background worker shell natively parsing Node JS functions. 
+[ DATA HANDLING ] => Extreme levels of data payloads (massive datasets resulting from computational simulations) are strictly diverted physically away from the centralized database via independent AWS S3 infrastructure providing practically infinite scale variables.
+[ RESPONSE ] => Users pull synchronized S3 outputs and map their UI code editors cleanly ensuring validation algorithms calculate safely without deteriorating primary application capacity.
+[ CONCLUSION ] => The entire stack remains cleanly detached, optimizing for high-capacity computation loads explicitly designed around testing edge constraints seamlessly simulating real-time engineering environments.
+====================================================

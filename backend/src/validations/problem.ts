@@ -13,7 +13,6 @@ export const ProblemSchema = z.object({
             explanation: z.string().optional(),
         })
     ).describe("2-3 input/output examples to clarify the problem"),
-    time_complexity: z.string().describe("Estimated optimal time complexity (e.g., O(N))"),
 });
 
 export type ProblemData = z.infer<typeof ProblemSchema>;

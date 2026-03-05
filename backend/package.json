@@ -4,11 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "nodemon --watch src --ext ts,js --exec tsx src/server.ts",
     "build": "tsc",
     "start": "node dist/src/server.js",
     "migrate": "tsx src/scripts/migrate.ts",
-    "worker": "node src/worker.mjs"
+    "worker": "tsx src/workers/index.ts",
+    "worker:dev": "nodemon --watch src --ext ts,js,json --exec tsx src/workers/index.ts"
   },
   "keywords": [],
   "author": "",
@@ -31,6 +32,7 @@
     "express": "^5.2.1",
     "google-auth-library": "^10.5.0",
     "ioredis": "^5.9.3",
+    "json5": "^2.2.3",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.18.0",
     "zod": "^4.3.6"
@@ -41,6 +43,7 @@
     "@types/express": "^5.0.6",
     "@types/node": "^25.2.3",
     "@types/pg": "^8.16.0",
+    "nodemon": "^3.1.14",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
