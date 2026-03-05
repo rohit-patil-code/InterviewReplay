@@ -28,6 +28,7 @@ interface Problem {
     original_input: string;
     ai_output: any; // Contains description, JSON structure
     created_at: string;
+    starter_code?: Record<string, string>;
 }
 
 const LANGUAGES = [
@@ -56,7 +57,13 @@ export default function PracticePage() {
         const fetchProblem = async () => {
             try {
                 const res = await authApi.getProblem(id);
-                setProblem(res.data.problem);
+                const fetchedProblem = res.data.problem;
+                setProblem(fetchedProblem);
+
+                // Initialize code editor with starter_code if available
+                if (fetchedProblem?.starter_code && fetchedProblem.starter_code[language.id]) {
+                    setCode(fetchedProblem.starter_code[language.id]);
+                }
             } catch (err: any) {
                 console.error("Failed to fetch problem", err);
                 setError(err.response?.data?.error || "Failed to load problem");
@@ -73,14 +80,20 @@ export default function PracticePage() {
     const handleLanguageChange = (langId: string) => {
         const selected = LANGUAGES.find(l => l.id === langId) || LANGUAGES[0];
         setLanguage(selected);
-        // Only reset code if it's currently the default of another language,
-        // to avoid wiping out user's work just by clicking dropdown.
-        // For simplicity right now, we just set the default.
-        setCode(selected.defaultCode);
+
+        if (problem?.starter_code && problem.starter_code[langId]) {
+            setCode(problem.starter_code[langId]);
+        } else {
+            setCode(selected.defaultCode);
+        }
     };
 
     const handleReset = () => {
-        setCode(language.defaultCode);
+        if (problem?.starter_code && problem.starter_code[language.id]) {
+            setCode(problem.starter_code[language.id]);
+        } else {
+            setCode(language.defaultCode);
+        }
     };
 
     if (isLoading) {
