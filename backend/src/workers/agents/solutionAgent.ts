@@ -10,7 +10,7 @@ export interface SolutionAgentResult {
 
 export class SolutionAgent extends BaseAgent {
     constructor() {
-        super("gemini-2.5-flash", "You are an expert algorithms engineer who writes highly robust optimal and brute-force solution scripts.");
+        super(undefined, "You are an expert algorithms engineer who writes highly robust optimal and brute-force solution scripts.");
     }
 
     /**

@@ -1,20 +1,18 @@
-import { GoogleGenerativeAI, GenerativeModel } from "@google/generative-ai";
+import Groq from "groq-sdk";
 
 export class BaseAgent {
-    protected genAI: GoogleGenerativeAI;
-    protected model: GenerativeModel;
+    protected groq: Groq;
+    protected modelName: string;
+    protected systemInstruction?: string;
 
-    constructor(modelName: string = "gemini-2.5-flash", systemInstruction?: string) {
-        if (!process.env.GEMINI_API_KEY) {
-            throw new Error("GEMINI_API_KEY is not defined in environment variables");
+    constructor(modelName: string = "llama-3.3-70b-versatile", systemInstruction?: string) {
+        if (!process.env.GROQ_API_KEY) {
+            throw new Error("GROQ_API_KEY is not defined in environment variables");
         }
 
-        this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-        const config: any = { model: modelName };
-        if (systemInstruction) config.systemInstruction = systemInstruction;
-
-        this.model = this.genAI.getGenerativeModel(config);
+        this.groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+        this.modelName = modelName;
+        this.systemInstruction = systemInstruction;
     }
 
     /**
@@ -31,18 +29,21 @@ export class BaseAgent {
 
         while (attempt <= maxRetries) {
             try {
-                const config: any = {};
-                if (isJsonFormat) {
-                    config.generationConfig = { responseMimeType: "application/json" };
+                const messages: any[] = [];
+                if (this.systemInstruction) {
+                    messages.push({ role: "system", content: this.systemInstruction });
                 }
+                messages.push({ role: "user", content: p });
 
-                // If user wants JSON mode, override the model instance just for this call
-                const tempModel = isJsonFormat
-                    ? this.genAI.getGenerativeModel({ ...this.model, ...config })
-                    : this.model;
+                const responseFormat = isJsonFormat ? { type: "json_object" } : undefined;
 
-                const result = await tempModel.generateContent(p);
-                let text = result.response.text();
+                const completion = await this.groq.chat.completions.create({
+                    messages: messages,
+                    model: this.modelName,
+                    response_format: responseFormat as any
+                });
+
+                let text = completion.choices[0]?.message?.content || "";
 
                 if (isJsonFormat) {
                     // Strip potential markdown blocks wrapping JSON

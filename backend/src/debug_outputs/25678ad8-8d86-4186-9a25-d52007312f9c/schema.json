@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "s": {
+      "type": "string",
+      "length": {
+        "min": 90000,
+        "max": 100000
+      }
+    }
+  },
+  "order": [
+    "s"
+  ]
+}

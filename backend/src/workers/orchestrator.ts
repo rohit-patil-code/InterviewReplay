@@ -93,8 +93,27 @@ export const generateTestCasesFlow = async (problemId: string, description: stri
             );
         }
 
-        console.log(`[Orchestrator - Phase 5] S3 Uploads complete.Process completed successfully.`);
+        console.log(`[Orchestrator - Phase 5] S3 Uploads complete.`);
 
+        // --- LOCAL DEBUG SAVE ---
+        console.log(`[Orchestrator - Debug Save] Saving debug scripts locally before cleaning up sandbox files...`);
+        const debugDir = path.join(process.cwd(), 'debug_outputs', problemId);
+        await fs.mkdir(debugDir, { recursive: true });
+
+        // Save the raw scripts to the local directory
+        await fs.writeFile(path.join(debugDir, 'generator_script.js'), scriptData.inputGenerationScript);
+        await fs.writeFile(path.join(debugDir, 'solution_script.js'), solutionData.solutionScript);
+        await fs.writeFile(path.join(debugDir, 'schema.json'), JSON.stringify(scriptData.generationSchema, null, 2));
+
+        // Copy all 15 test case text files
+        for (let i = 1; i <= 15; i++) {
+            const inName = `input_${i}.txt`;
+            const outName = `output_${i}.txt`;
+            await fs.copyFile(path.join(tmpDir, inName), path.join(debugDir, inName)).catch(() => { });
+            await fs.copyFile(path.join(tmpDir, outName), path.join(debugDir, outName)).catch(() => { });
+        }
+
+        console.log(`[Orchestrator - Debug Save] Saved sample I/O and bot scripts to ./debug_outputs/${problemId}`);
     } finally {
         // --- PHASE 6: Sandboxed Cleanup ---
         console.log(`[Orchestrator - Phase 6] Cleaning up local sandbox files from ${tmpDir}...`);

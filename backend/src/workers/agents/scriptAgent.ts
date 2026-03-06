@@ -11,8 +11,8 @@ export interface ScriptAgentResult {
 
 export class ScriptAgent extends BaseAgent {
     constructor() {
-        // We use gemini-2.5-flash as the default model [cite: 31]
-        super("gemini-2.5-flash", "You are an expert backend engineer who writes highly robust deterministic Node.js test-case generation scripts.");
+        // We use llama-3.3-70b-versatile as the default model via BaseAgent
+        super(undefined, "You are an expert backend engineer who writes highly robust deterministic Node.js test-case generation scripts.");
     }
 
     /**
