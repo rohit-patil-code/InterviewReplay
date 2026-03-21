@@ -138,6 +138,7 @@ function ConfigurationPanel({
                     </div>
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="vegastack">VegaStack</SelectItem>
                     <SelectItem value="google">Google</SelectItem>
                     <SelectItem value="amazon">Amazon</SelectItem>
                     <SelectItem value="meta">Meta</SelectItem>

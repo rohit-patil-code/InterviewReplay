@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import * as problemRepository from '../repositories/problemRepository';
 import { Queue } from 'bullmq';
 import Redis from 'ioredis';
+import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 
 console.log('[System] Initializing global Redis connection for Producer...');
 const connection = new Redis({
@@ -22,6 +23,39 @@ connection.on('error', (err) => {
 
 console.log('[System] Initializing BullMQ Producer Queue...');
 const testCaseQueue = new Queue('{test-case-generation}', { connection });
+
+async function deleteProblemFromS3(problemId: string) {
+    const s3Client = new S3Client({
+        region: process.env.AWS_REGION || 'us-east-1',
+        credentials: {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+        }
+    });
+    
+    const bucket = process.env.AWS_S3_BUCKET_NAME || 'oarecall-test-cases';
+    const prefix = `problems/${problemId}/`;
+
+    try {
+        const listCmd = new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix });
+        const listRes = await s3Client.send(listCmd);
+        
+        if (listRes.Contents && listRes.Contents.length > 0) {
+            const deleteCmd = new DeleteObjectsCommand({
+                Bucket: bucket,
+                Delete: {
+                    Objects: listRes.Contents.map(c => ({ Key: c.Key }))
+                }
+            });
+            await s3Client.send(deleteCmd);
+            console.log(`[S3] Successfully purged ${listRes.Contents.length} objects for problem ${problemId}`);
+        } else {
+            console.log(`[S3] No objects found for problem ${problemId} to delete.`);
+        }
+    } catch (e) {
+        console.error(`[S3] Failed to delete objects for problem ${problemId}`, e);
+    }
+}
 
 export const createProblem = async (req: Request, res: Response, next: NextFunction) => {
     console.log('\n--- NEW REQUEST: POST /api/problems ---');
@@ -90,6 +124,9 @@ export const deleteProblem = async (req: Request, res: Response, next: NextFunct
             res.status(404).json({ error: "Problem not found or unauthorized to delete" });
             return;
         }
+
+        // Wipe S3 dependencies natively 
+        await deleteProblemFromS3(problemId);
 
         res.status(200).json({ message: "Problem deleted successfully" });
     } catch (error) {

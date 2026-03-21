@@ -37,4 +37,8 @@ export const authApi = {
     getProblem: (id: string) => api.get(`/problems/${id}`),
     updateProblem: (id: string, data: any) => api.put(`/problems/${id}`, data),
     deleteProblem: (id: string) => api.delete(`/problems/${id}`),
+    
+    // Execution
+    executeCode: (id: string, code: string, language: string, mode: 'run' | 'submit') =>
+        api.post(`/problems/${id}/execute`, { code, language, mode }),
 };

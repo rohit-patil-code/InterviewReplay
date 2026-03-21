@@ -16,9 +16,9 @@ export class SolutionAgent extends BaseAgent {
     /**
      * Executes the LLM 5 (Solution Generation) -> SandboxRunner (Execution) -> LLM 6 (Validation/Correction) pipeline.
      */
-    async generateAndVerifySolution(description: string, generationSchema: string, workingDirectory: string): Promise<SolutionAgentResult> {
+    async generateAndVerifySolution(description: string, generationSchema: string, workingDirectory: string, sampleInputPayload: string): Promise<SolutionAgentResult> {
         // LLM 5: Initial Solution & Schema Generation
-        const initialPrompt = generateSolutionPrompt(description, generationSchema);
+        const initialPrompt = generateSolutionPrompt(description, generationSchema, sampleInputPayload);
 
         // As defined in solutionPrompts.ts, this returns a strict JSON containing starter_code, solution_script
         let currentResponse = await this.generateWithReflection(initialPrompt, 1, true);

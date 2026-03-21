@@ -7,6 +7,7 @@ import * as path from 'path';
 export interface ScriptAgentResult {
     generationSchema: any;
     inputGenerationScript: string;
+    sampleInputPayload: string;
 }
 
 export class ScriptAgent extends BaseAgent {
@@ -116,7 +117,8 @@ Return ONLY the final, correct raw Node.js script. DO NOT WRAP IT IN MARKDOWN OR
         // 5. Return the validated script
         return {
             generationSchema: parsedData.generation_schema,
-            inputGenerationScript: finalScript
+            inputGenerationScript: finalScript,
+            sampleInputPayload: sampleInput
         };
     }
 

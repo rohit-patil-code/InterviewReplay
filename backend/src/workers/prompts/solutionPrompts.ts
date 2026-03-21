@@ -1,4 +1,4 @@
-export const generateSolutionPrompt = (description: string, generationSchema: string) => `
+export const generateSolutionPrompt = (description: string, generationSchema: string, sampleInput: string) => `
 Analyze this problem: "${description}".
 We are using a SCHEMA-DRIVEN GENERATION MODEL. You MUST NOT generate executable scripts to generate inputs.
 You must ONLY output a strict JSON object containing two main keys: 'starter_code' and 'solution_script'.
@@ -13,6 +13,15 @@ ${generationSchema}
 'solution_script' MUST be a raw Node.js script (as a string) that reads 'input_x.txt', parses the data, runs an optimal solution to the problem, and writes the exact expected output to 'output_x.txt'.
 The script MUST do this in a loop for x=1 to 15 synchronously (e.g. using fs.readFileSync and fs.writeFileSync). DO NOT use async/await for file operations. The script MUST actually execute itself at the bottom of the file!
 CRITICAL PATHING RULE: You MUST resolve file paths natively using \`const filePath = path.join(process.cwd(), 'input_' + x + '.txt');\`. DO NOT hardcode absolute directories like \`C:\\Users\\...\`.
+
+CRITICAL I/O RULE: You MUST read the input files using \`JSON.parse(fs.readFileSync(filepath, 'utf8'))\`. The input files are strictly JSON formatted. DO NOT use \`.split(',')\` or manual string parsing to read the inputs.
+
+CRITICAL: Here is the EXACT literal string format of the input files you will be reading. 
+SAMPLE INPUT FILE CONTENT:
+"""
+${sampleInput}
+"""
+You MUST parse this string correctly using JSON.parse() before passing the arguments to your algorithm.
 
 CRITICAL SCRIPT FORMATTING:
 1. The script MUST be formatted with proper newlines (\\n) and indentation. DO NOT output the script as a single giant line.

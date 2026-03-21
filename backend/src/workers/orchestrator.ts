@@ -52,7 +52,10 @@ export const generateTestCasesFlow = async (problemId: string, description: stri
         // --- PHASE 3: Solution Generation ---
         console.log(`[Orchestrator - Phase 3] Agent 5/6: Generating Optimal Solution and Starter Code using Schema...`);
         const schemaString = JSON.stringify(scriptData.generationSchema);
-        const solutionData = await solutionAgent.generateAndVerifySolution(description, schemaString, tmpDir);
+        // Pass a sample of the generated input so the Solution Agent knows EXACTLY what schema it is parsing
+        const sampleInputPayload = await fs.readFile(path.join(tmpDir, 'input_1.txt'), 'utf8');
+        
+        const solutionData = await solutionAgent.generateAndVerifySolution(description, schemaString, tmpDir, sampleInputPayload);
 
         console.log(`[Orchestrator - Phase 3] Successfully computed outputs via Optimal AI Solver Execution.`);
 

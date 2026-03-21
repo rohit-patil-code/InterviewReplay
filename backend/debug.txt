@@ -1,0 +1,17 @@
+[
+  {
+    "input": "s = \"leetcode\"",
+    "output": "0",
+    "explanation": "The character 'l' appears only once and is the first character to do so. Its index is 0."
+  },
+  {
+    "input": "s = \"loveleetcode\"",
+    "output": "2",
+    "explanation": "The character 'v' appears only once and is the first character to do so. Its index is 2."
+  },
+  {
+    "input": "s = \"aabb\"",
+    "output": "-1",
+    "explanation": "All characters ('a' and 'b') repeat in the string. Therefore, no unique character exists, and we return -1."
+  }
+]

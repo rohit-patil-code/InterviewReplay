@@ -11,6 +11,8 @@ CRITICAL INSTRUCTION FOR TLE TESTING: For properties that dictate SIZE or LENGTH
 The script MUST do this in a loop for x=1 to 15 synchronously (e.g. using fs.writeFileSync). DO NOT use async/await for file operations. The script MUST actually execute itself at the bottom of the file!
 CRITICAL PATHING RULE: You MUST resolve file paths natively using \`const filePath = path.join(process.cwd(), 'input_' + x + '.txt');\`. DO NOT hardcode absolute directories like \`C:\\Users\\...\`.
 
+CRITICAL I/O RULE: You MUST serialize all generated test cases into the text files using strictly \`JSON.stringify()\`. Do not use manual string concatenation, newlines, or CSV formats. The file must contain exactly one valid JSON array or JSON object representing the input arguments.
+
 CRITICAL SCRIPT FORMATTING:
 1. The script MUST be formatted with proper newlines (\\n) and indentation. DO NOT output the script as a single giant line.
 2. DO NOT include any markdown formatting, backticks, or explanatory text like "Here is your script" or "Node.js" inside the string. It must be ONLY actual valid JavaScript code.

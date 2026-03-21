@@ -34,8 +34,6 @@ interface Problem {
 const LANGUAGES = [
     { id: "python", name: "Python", defaultCode: "class Solution:\n    def solve(self):\n        pass" },
     { id: "javascript", name: "JavaScript", defaultCode: "/**\n * @return {any}\n */\nvar solve = function() {\n    \n};" },
-    { id: "java", name: "Java", defaultCode: "class Solution {\n    public void solve() {\n        \n    }\n}" },
-    { id: "cpp", name: "C++", defaultCode: "class Solution {\npublic:\n    void solve() {\n        \n    }\n};" },
 ];
 
 export default function PracticePage() {
@@ -52,6 +50,9 @@ export default function PracticePage() {
 
     const [activeTestCase, setActiveTestCase] = useState(0);
     const [activeBottomTab, setActiveBottomTab] = useState<"testcase" | "result">("testcase");
+    const [isExecuting, setIsExecuting] = useState(false);
+    const [executionResults, setExecutionResults] = useState<any>(null);
+    const [activeResultTab, setActiveResultTab] = useState<number>(0);
 
     useEffect(() => {
         const fetchProblem = async () => {
@@ -96,6 +97,22 @@ export default function PracticePage() {
         }
     };
 
+    const handleExecute = async (mode: 'run' | 'submit') => {
+        setIsExecuting(true);
+        setActiveBottomTab("result");
+        setExecutionResults({ mode, pending: true });
+        try {
+            const res = await authApi.executeCode(id, code, language.id, mode);
+            setExecutionResults({ mode, data: res.data });
+            setActiveResultTab(0);
+        } catch (err: any) {
+            console.error("Execution failed", err);
+            setExecutionResults({ mode, error: err.response?.data?.error || err.message });
+        } finally {
+            setIsExecuting(false);
+        }
+    };
+
     if (isLoading) {
         return (
             <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
@@ -136,11 +153,25 @@ export default function PracticePage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <Button variant="secondary" size="sm" className="h-8 gap-2 bg-green-500/10 text-green-500 hover:bg-green-500/20 hover:text-green-600 border-0">
-                        <Play className="h-3.5 w-3.5" /> Run Code
+                    <Button 
+                        onClick={() => handleExecute('run')}
+                        disabled={isExecuting}
+                        variant="secondary" 
+                        size="sm" 
+                        className="h-8 gap-2 bg-green-500/10 text-green-500 hover:bg-green-500/20 hover:text-green-600 border-0"
+                    >
+                        {isExecuting && executionResults?.mode === 'run' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} 
+                        {isExecuting && executionResults?.mode === 'run' ? 'Running...' : 'Run Code'}
                     </Button>
-                    <Button variant="default" size="sm" className="h-8 gap-2 bg-green-600 hover:bg-green-700 text-white">
-                        <Send className="h-3.5 w-3.5" /> Submit
+                    <Button 
+                        onClick={() => handleExecute('submit')}
+                        disabled={isExecuting}
+                        variant="default" 
+                        size="sm" 
+                        className={`h-8 gap-2 text-white ${isExecuting && executionResults?.mode === 'submit' ? 'bg-green-700' : 'bg-green-600 hover:bg-green-700'}`}
+                    >
+                        {isExecuting && executionResults?.mode === 'submit' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} 
+                        {isExecuting && executionResults?.mode === 'submit' ? 'Submitting...' : 'Submit'}
                     </Button>
                 </div>
             </div>
@@ -322,9 +353,107 @@ export default function PracticePage() {
                                                 </div>
                                             )
                                         ) : (
-                                            <div className="h-full flex items-center justify-center text-zinc-500 font-medium">
-                                                You must run your code first
-                                            </div>
+                                            !executionResults || (isExecuting && executionResults.pending) ? (
+                                                <div className="h-full flex flex-col items-center justify-center text-zinc-500 font-medium pb-8 gap-3">
+                                                    {isExecuting ? (
+                                                        <>
+                                                            <Loader2 className="h-8 w-8 animate-spin text-zinc-600" />
+                                                            <span className="text-zinc-400">Executing Code on {executionResults?.mode === 'submit' ? 'All Massive Test Cases' : 'Sample Edge Cases'}...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Terminal className="h-10 w-10 text-zinc-700" />
+                                                            You must run your code first to see results.
+                                                        </>
+                                                    )}
+                                                </div>
+                                            ) : executionResults.error ? (
+                                                <div className="h-full flex flex-col items-center justify-center text-red-500 font-medium pb-8 gap-3 max-w-xl mx-auto text-center">
+                                                    <TerminalSquare className="h-10 w-10 text-red-500/50" />
+                                                    <span className="text-lg">Execution Failed</span>
+                                                    <span className="text-sm text-red-400/80 font-mono bg-red-500/10 p-4 rounded-md text-left w-full overflow-auto">
+                                                        {executionResults.error}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-4">
+                                                    <div className="flex gap-4 items-center">
+                                                        <h3 className={`text-xl font-bold ${executionResults.data?.allPassed ? 'text-green-500' : 'text-red-500'}`}>
+                                                            {executionResults.data?.allPassed ? 'Accepted' : 'Wrong Answer'}
+                                                        </h3>
+                                                        <span className="text-zinc-500 text-sm">
+                                                            {executionResults.data?.results?.filter((r: any) => r.passed).length} / {executionResults.data?.results?.length} testcases passed
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    {/* Tabs for Test Results */}
+                                                    <div className="flex gap-2 border-b border-zinc-800 pb-2 overflow-x-auto">
+                                                        {executionResults.data?.results?.map((res: any, idx: number) => (
+                                                            <button 
+                                                                key={idx}
+                                                                onClick={() => setActiveResultTab(idx)}
+                                                                className={`px-3 py-1.5 rounded flex items-center gap-2 text-sm font-medium transition-colors ${activeResultTab === idx ? (res.passed ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400') : 'hover:bg-zinc-800 text-zinc-500'}`}
+                                                            >
+                                                                <div className={`h-2 w-2 rounded-full ${res.passed ? 'bg-green-500' : 'bg-red-500'}`} />
+                                                                Case {idx + 1}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+
+                                                    {/* Selected Test Result Details */}
+                                                    {executionResults.data?.results?.[activeResultTab] && (
+                                                        <div className="space-y-4 max-w-3xl pt-2">
+                                                            
+                                                            {executionResults.data.results[activeResultTab].error && (
+                                                                <div className="space-y-1.5 pt-2">
+                                                                    <div className="text-xs text-red-400 font-medium">Runtime Error:</div>
+                                                                    <div className="bg-red-950/30 border border-red-500/20 rounded-md p-3 font-mono text-sm text-red-300 break-all whitespace-pre-wrap">
+                                                                        {executionResults.data.results[activeResultTab].error}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            <div className="space-y-1.5">
+                                                                <div className="text-xs text-zinc-500 font-medium">Input:</div>
+                                                                <div className="bg-zinc-900 border border-zinc-800 rounded-md p-3 font-mono text-sm text-zinc-300 break-all whitespace-pre-wrap">
+                                                                    {executionResults.data.results[activeResultTab].inputSnippet 
+                                                                        ? executionResults.data.results[activeResultTab].inputSnippet 
+                                                                        : aiData?.examples?.[activeResultTab]?.input || 'Hidden Large Input'}
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            <div className="space-y-1.5">
+                                                                <div className="text-xs text-zinc-500 font-medium">Output:</div>
+                                                                <div className={`border rounded-md p-3 font-mono text-sm break-all whitespace-pre-wrap ${executionResults.data.results[activeResultTab].passed ? 'bg-zinc-900 border-zinc-800 text-zinc-300' : 'bg-red-950/20 border-red-500/30 text-red-300'}`}>
+                                                                    {executionResults.data.results[activeResultTab].userOutput || 'undefined'}
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="space-y-1.5">
+                                                                <div className="text-xs text-zinc-500 font-medium">Expected:</div>
+                                                                <div className="bg-zinc-900 border border-zinc-800 rounded-md p-3 font-mono text-sm text-zinc-300 break-all whitespace-pre-wrap">
+                                                                    {executionResults.data.results[activeResultTab].expectedOutput}
+                                                                </div>
+                                                            </div>
+
+                                                            {executionResults.data.results[activeResultTab].stdout && typeof executionResults.data.results[activeResultTab].stdout === 'string' && executionResults.data.results[activeResultTab].stdout.trim().length > 0 && (
+                                                                <div className="space-y-1.5">
+                                                                    <div className="text-xs text-zinc-500 font-medium">Stdout (Console Logs):</div>
+                                                                    <div className="bg-black border border-zinc-800 rounded-md p-3 font-mono text-sm text-zinc-400 break-all whitespace-pre-wrap">
+                                                                        {executionResults.data.results[activeResultTab].stdout}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            
+                                                            {executionResults.data.results[activeResultTab].runtimeMs && (
+                                                                 <div className="text-xs text-zinc-500 pt-2 flex items-center gap-2">
+                                                                     Runtime: <span className="font-mono text-zinc-300">{Math.round(executionResults.data.results[activeResultTab].runtimeMs)} ms</span>
+                                                                 </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )
                                         )}
                                     </div>
                                 </div>

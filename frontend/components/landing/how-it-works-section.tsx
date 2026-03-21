@@ -71,7 +71,7 @@ export function HowItWorksSection() {
                     <div className="flex-1 text-center md:text-right md:pr-12 order-2 md:order-1 px-4 md:px-0">
                         <h3 className="text-2xl font-semibold mb-3">Generate & Verify</h3>
                         <p className="text-muted-foreground text-lg">
-                            We generate a Python script to produce large-scale test cases (N=10^5) and run a brute-force validator.
+                            We generate a NodeJs script to produce large-scale test cases (N=10^5) and run a brute-force validator.
                             Your code is tested against <i>real</i> data, not just example cases.
                         </p>
                     </div>
