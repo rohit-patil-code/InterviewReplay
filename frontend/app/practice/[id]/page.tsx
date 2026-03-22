@@ -62,9 +62,21 @@ export default function PracticePage() {
                 const fetchedProblem = res.data.problem;
                 setProblem(fetchedProblem);
 
-                // Initialize code editor with starter_code if available
-                if (fetchedProblem?.starter_code && fetchedProblem.starter_code[language.id]) {
-                    setCode(fetchedProblem.starter_code[language.id]);
+                // Initialize component state leveraging explicit browser storage preferences
+                const savedLangId = localStorage.getItem('preferredEditorLanguage');
+                const initialLang = LANGUAGES.find(l => l.id === savedLangId) || LANGUAGES[0];
+                setLanguage(initialLang);
+
+                // Priority 1: Inject isolated code draft actively sitting natively in localStorage
+                // Priority 2: Inject AI generic starter code mappings from DB
+                // Priority 3: Fallback on default class templates
+                const cachedCode = localStorage.getItem(`problem-draft-${fetchedProblem.id}-${initialLang.id}`);
+                if (cachedCode) {
+                    setCode(cachedCode);
+                } else if (fetchedProblem?.starter_code && fetchedProblem.starter_code[initialLang.id]) {
+                    setCode(fetchedProblem.starter_code[initialLang.id]);
+                } else {
+                    setCode(initialLang.defaultCode);
                 }
             } catch (err: any) {
                 console.error("Failed to fetch problem", err);
@@ -82,21 +94,43 @@ export default function PracticePage() {
     const handleLanguageChange = (langId: string) => {
         const selected = LANGUAGES.find(l => l.id === langId) || LANGUAGES[0];
         setLanguage(selected);
+        localStorage.setItem('preferredEditorLanguage', langId);
 
-        if (problem?.starter_code && problem.starter_code[langId]) {
-            setCode(problem.starter_code[langId]);
+        if (problem) {
+            const cachedCode = localStorage.getItem(`problem-draft-${problem.id}-${langId}`);
+            if (cachedCode) {
+                setCode(cachedCode);
+            } else if (problem.starter_code && problem.starter_code[langId]) {
+                setCode(problem.starter_code[langId]);
+            } else {
+                setCode(selected.defaultCode);
+            }
         } else {
             setCode(selected.defaultCode);
         }
     };
 
     const handleReset = () => {
-        if (problem?.starter_code && problem.starter_code[language.id]) {
+        if (!problem) return;
+        
+        // Discard local modifications restoring original AI/Template baseline cleanly
+        localStorage.removeItem(`problem-draft-${problem.id}-${language.id}`);
+        
+        if (problem.starter_code && problem.starter_code[language.id]) {
             setCode(problem.starter_code[language.id]);
         } else {
             setCode(language.defaultCode);
         }
     };
+
+    // Autosave Debounced Workspaces continuously into LocalStorage natively avoiding Backend limits
+    useEffect(() => {
+        if (!problem || !code) return;
+        const autoSaveTimer = setTimeout(() => {
+            localStorage.setItem(`problem-draft-${problem.id}-${language.id}`, code);
+        }, 800);
+        return () => clearTimeout(autoSaveTimer);
+    }, [code, language.id, problem]);
 
     const handleExecute = async (mode: 'run' | 'submit') => {
         setIsExecuting(true);
@@ -240,7 +274,7 @@ export default function PracticePage() {
 
                             {/* TOP: EDITOR */}
                             <ResizablePanel defaultSize={70} minSize={20}>
-                                <div className="flex flex-col h-full bg-zinc-950">
+                                <div className="flex flex-col h-full bg-zinc-950 min-h-0">
                                     {/* Editor Toolbar */}
                                     <div className="h-12 border-b border-border/40 flex items-center justify-between px-4 bg-zinc-900 shrink-0">
                                         <div className="flex items-center gap-2">
@@ -270,7 +304,7 @@ export default function PracticePage() {
                                     </div>
 
                                     {/* Monaco Editor Container */}
-                                    <div className="flex-1 w-full pt-4">
+                                    <div className="flex-1 w-full pt-4 min-h-0">
                                         <Editor
                                             height="100%"
                                             language={language.id}
