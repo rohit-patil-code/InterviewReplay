@@ -102,8 +102,8 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
             return;
         }
 
-        if (language !== 'javascript' && language !== 'python') {
-            res.status(400).json({ error: `Language '${language}' is not supported in this MVP phase (requires isolated local compilers). Please use JavaScript or Python.` });
+        if (!['javascript', 'python', 'java'].includes(language)) {
+            res.status(400).json({ error: `Language '${language}' is not supported in this phase. Please use JavaScript, Python, or Java.` });
             return;
         }
 
@@ -161,31 +161,48 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
                 res.status(400).json({ error: `Class name mismatch! Expected '${aiMatch[1]}' but found '${userClassName}'.` });
                 return;
             }
+        } else if (language === 'java') {
+            // e.g. class Solution { public int firstUniqChar(String s) {
+            const match = code.match(/class\s+([a-zA-Z0-9_]+)\s*{[\s\S]*?(?:public|private|protected)?\s*(?:static\s+)?[\w<>[\]]+\s+([a-zA-Z0-9_]+)\s*\(/);
+            if (!match) {
+                res.status(400).json({ error: "Could not find a valid Java class and method definition inside the provided code" });
+                return;
+            }
+            userClassName = match[1];
+            userFuncName = match[2];
+            
+            const aiMatch = expectedStarter.match(/class\s+([a-zA-Z0-9_]+)\s*{/);
+            if (aiMatch && aiMatch[1] !== userClassName) {
+                res.status(400).json({ error: `Class name mismatch! Expected '${aiMatch[1]}' but found '${userClassName}'.` });
+                return;
+            }
         }
 
         // Fetch Test Cases
         let testCases: any[] = [];
+        let exampleCases: any[] = [];
         
+        // 1. Universally map exactly what the UI shows the user natively (The Examples)
+        if (aiOutput?.examples && Array.isArray(aiOutput.examples)) {
+            exampleCases = aiOutput.examples.map((ex: any, idx: number) => ({
+                id: `example-${idx + 1}`,
+                input_data: ex.input,
+                expected_output: ex.output
+            }));
+        } else {
+            // Fallback to edge cases if UI examples were not natively generated
+            const edgeRes = await pool.query('SELECT * FROM test_cases WHERE problem_id = $1 AND type = $2', [problemId, 'edge']);
+            exampleCases = edgeRes.rows;
+        }
+
         if (mode === 'run') {
-            // Perfectly match the LeetCode behavior: Execute the EXACT examples shown in the UI description 
-            if (aiOutput?.examples && Array.isArray(aiOutput.examples)) {
-                testCases = aiOutput.examples.map((ex: any, idx: number) => ({
-                    id: `example-${idx + 1}`,
-                    input_data: ex.input,
-                    expected_output: ex.output
-                }));
-            } else {
-                // Fallback to edge cases if UI examples were not generated
-                const edgeRes = await pool.query('SELECT * FROM test_cases WHERE problem_id = $1 AND type = $2', [problemId, 'edge']);
-                testCases = edgeRes.rows;
-            }
-            
+            testCases = exampleCases;
             if (testCases.length > 3) testCases = testCases.slice(0, 3);
             
         } else {
-            // mode === 'submit': evaluate all hidden massive test cases
-            const submitRes = await pool.query('SELECT * FROM test_cases WHERE problem_id = $1 AND type = $2', [problemId, 'large_tle']);
-            testCases = submitRes.rows;
+            // mode === 'submit': evaluate SAME EXACT UI examples + all hidden massive test cases from S3 concurrently
+            const submitRes = await pool.query('SELECT * FROM test_cases WHERE problem_id = $1 AND type = $2 ORDER BY id ASC', [problemId, 'large_tle']);
+            testCases = [...exampleCases, ...submitRes.rows];
         }
 
         const results = [];
