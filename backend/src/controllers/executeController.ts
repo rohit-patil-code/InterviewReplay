@@ -102,8 +102,8 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
             return;
         }
 
-        if (!['javascript', 'python', 'java'].includes(language)) {
-            res.status(400).json({ error: `Language '${language}' is not supported in this phase. Please use JavaScript, Python, or Java.` });
+        if (!['cpp', 'python', 'java'].includes(language)) {
+            res.status(400).json({ error: `Language '${language}' is not supported in this phase. Please use C++, Python, or Java.` });
             return;
         }
 
@@ -132,16 +132,16 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
         let userClassName = "";
         let userFuncName = "";
         
-        if (language === 'javascript') {
-            const match = code.match(/class\s+([a-zA-Z0-9_]+)\s*{[\s\S]*?(?:async\s+)?([a-zA-Z0-9_]+)\s*\(/);
+        if (language === 'cpp') {
+            // e.g. class Solution { public: int firstUniqChar(string s) {
+            const match = code.match(/class\s+([a-zA-Z0-9_]+)[\s\S]*?(?:public\s*:\s*)?[\w<>,:\*&\s]+\s+([a-zA-Z0-9_]+)\s*\(/);
             if (!match) {
-                res.status(400).json({ error: "Could not find a valid JavaScript class and method definition inside the provided code" });
+                res.status(400).json({ error: "Could not find a valid C++ class and public method definition inside the provided code" });
                 return;
             }
             userClassName = match[1];
             userFuncName = match[2];
             
-            // Validate against the AI's expected starter code class name
             const aiMatch = expectedStarter.match(/class\s+([a-zA-Z0-9_]+)\s*{/);
             if (aiMatch && aiMatch[1] !== userClassName) {
                 res.status(400).json({ error: `Class name mismatch! Expected '${aiMatch[1]}' but found '${userClassName}'.` });
