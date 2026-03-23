@@ -205,16 +205,13 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
             testCases = [...exampleCases, ...submitRes.rows];
         }
 
-        const results = [];
         let allPassed = true;
-
-        for (let i = 0; i < testCases.length; i++) {
-            const tc = testCases[i];
-            
+        
+        // 1. Prepare and Fetch all inputs natively concurrently
+        const preppedCases = await Promise.all(testCases.map(async (tc) => {
             let inputJsonStr = tc.input_data;
             let expectedOutputStr = tc.expected_output;
 
-            // If it's a S3 file (large_tle), fetch it securely via AWS SDK
             if (!inputJsonStr && tc.input_file_url) {
                 inputJsonStr = await fetchS3File(tc.input_file_url);
             }
@@ -222,14 +219,29 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
                 expectedOutputStr = await fetchS3File(tc.output_file_url);
             }
 
-            // Sanitize unverified AI/DB text inputs strictly into schema-mapped JSON 
-            const sanitizedInputStr = sanitizeInputToJson(inputJsonStr || "", schema);
+            return {
+                tc,
+                originalInputStr: inputJsonStr,
+                sanitizedInputStr: sanitizeInputToJson(inputJsonStr || "", schema),
+                expectedClean: expectedOutputStr ? expectedOutputStr.trim() : ""
+            };
+        }));
 
-            // Execute safely through Language Isolated Sandbox
-            const execRes = await SandboxRunner.executeUserCode(code, language, userClassName, userFuncName, schema, sanitizedInputStr, 3000);
+        // 2. Extract batch payload for the Sandbox
+        const batchInputs = preppedCases.map(p => p.sanitizedInputStr);
 
+        // 3. Execute ONE monolithic Docker sandbox securely hooking all test cases in O(1) container latency natively
+        const batchTimeoutMs = mode === 'submit' ? 10000 : 3000;
+        const batchResults = await SandboxRunner.executeUserCode(code, language, userClassName, userFuncName, schema, batchInputs, batchTimeoutMs);
+        
+        const results = [];
+
+        for (let i = 0; i < preppedCases.length; i++) {
+            const prep = preppedCases[i];
+            const execRes = batchResults[i] || { success: false, error: "Missing result from batch execution natively failing to map array lengths." };
+            
             let passed = false;
-            let expectedClean = expectedOutputStr ? expectedOutputStr.trim() : "";
+            let expectedClean = prep.expectedClean;
             let userOutputClean = undefined;
 
             if (execRes.success && execRes.result !== undefined) {
@@ -254,7 +266,7 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
             }
 
             results.push({
-                testCaseId: tc.id,
+                testCaseId: prep.tc.id,
                 passed: passed,
                 runtimeMs: execRes.runtimeMs,
                 expectedOutput: expectedClean,
@@ -262,11 +274,11 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
                 stdout: execRes.stdout,
                 stderr: execRes.stderr,
                 error: execRes.error,
-                // Pass raw input for the frontend UI snippet preview
-                inputSnippet: inputJsonStr ? inputJsonStr.substring(0, 100) + (inputJsonStr.length > 100 ? '...' : '') : ''
+                // Pass raw input for the frontend UI snippet preview natively
+                inputSnippet: prep.originalInputStr ? prep.originalInputStr.substring(0, 100) + (prep.originalInputStr.length > 100 ? '...' : '') : ''
             });
 
-            // If submit mode and we fail one, break early
+            // If submit mode and we fail one, stop iterating (Backend Docker ran everything, but UI maps sequentially natively)
             if (mode === 'submit' && !passed) {
                 break;
             }
