@@ -7,6 +7,7 @@ import userRoutes from './routes/userRoutes';
 import authRoutes from './routes/authRoutes';
 import problemRoutes from './routes/problemRoutes';
 import executeRoutes from './routes/executeRoutes';
+import submissionsRoutes from './routes/submissionsRoutes';
 
 dotenv.config();
 
@@ -25,5 +26,6 @@ app.use('/api/profile', userRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/problems', problemRoutes);
 app.use('/api/problems/:id', executeRoutes);
+app.use('/api/submissions', submissionsRoutes);
 
 export default app;

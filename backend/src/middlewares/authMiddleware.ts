@@ -1,4 +1,3 @@
-
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AuthError } from '../utils/errors';
@@ -17,7 +16,7 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
         const decoded = jwt.verify(token, JWT_SECRET);
         (req as any).user = decoded;
         next();
-    } catch (error) {
+    } catch (error: any) {
         if (error instanceof jwt.JsonWebTokenError) {
             next(new AuthError('Invalid token', 401));
         } else {
