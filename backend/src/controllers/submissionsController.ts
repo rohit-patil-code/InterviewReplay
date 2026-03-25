@@ -6,7 +6,6 @@ export const getSubmissions = async (req: Request, res: Response, next: NextFunc
         const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
         // Retrieve userId from the decoded JWT token (populated by requireAuth middleware)
-        // User's previous edit confirmed that the field name is 'userId'
         const userId = (req as any).user?.userId;
         
         if (!userId) {
@@ -24,7 +23,7 @@ export const getSubmissions = async (req: Request, res: Response, next: NextFunc
             query = `
                 SELECT 
                     s.id, s.problem_id, s.language, s.code, s.status, s.runtime_ms, s.submitted_at,
-                    p.title as problem_title
+                    p.title as problem_title, p.company as company_name
                 FROM submissions s
                 LEFT JOIN problems p ON s.problem_id = p.id
                 WHERE s.problem_id = $1::uuid AND s.user_id = $2::uuid
@@ -33,11 +32,11 @@ export const getSubmissions = async (req: Request, res: Response, next: NextFunc
             `;
             params = [problemId, userId];
         } else {
-            // Fetch all submissions for the history page
+            // Fetch all submissions for the history page/profile
             query = `
                 SELECT 
                     s.id, s.problem_id, s.language, s.code, s.status, s.runtime_ms, s.submitted_at,
-                    p.title as problem_title, p.difficulty
+                    p.title as problem_title, p.difficulty, p.company as company_name
                 FROM submissions s
                 LEFT JOIN problems p ON s.problem_id = p.id
                 WHERE s.user_id = $1::uuid
@@ -49,7 +48,7 @@ export const getSubmissions = async (req: Request, res: Response, next: NextFunc
 
         const result = await pool.query(query, params);
         
-        // Build heatmap data: count submissions per day for the last year
+        // Build heatmap data
         const heatmapQuery = `
             SELECT 
                 DATE(submitted_at AT TIME ZONE 'UTC') as day,

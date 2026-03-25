@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "properties": {
+    "str": {
+      "type": "string",
+      "min_length": 90000,
+      "max_length": 100000
+    }
+  },
+  "order": [
+    "str"
+  ]
+}

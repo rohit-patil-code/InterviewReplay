@@ -5,11 +5,14 @@ export interface User {
     email: string;
     first_name?: string;
     last_name?: string;
+    display_name?: string;
+    display_name_last_changed_at?: Date;
     google_id?: string;
     is_verified: boolean;
     created_at: Date;
     updated_at: Date;
-}
+};
+
 
 export const findByEmail = async (email: string): Promise<User | null> => {
     const result = await query('SELECT * FROM users WHERE email = $1', [email]);

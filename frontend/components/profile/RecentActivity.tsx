@@ -1,23 +1,9 @@
+"use client"
 
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MoreHorizontal, CheckCircle2, XCircle, Clock } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { CheckCircle2, XCircle, Clock } from "lucide-react";
+import Link from "next/link";
 
 interface ActivityItem {
     id: string;
@@ -31,73 +17,89 @@ interface ActivityItem {
 const mockActivity: ActivityItem[] = [
     { id: "1", problemName: "Two Sum", difficulty: "Easy", company: "Amazon", date: "2 hours ago", status: "Solved" },
     { id: "2", problemName: "LRU Cache", difficulty: "Medium", company: "Google", date: "Yesterday", status: "Solved" },
-    { id: "3", problemName: "Median of Two Sorted Arrays", difficulty: "Hard", company: "Apple", date: "2 days ago", status: "Failed" },
-    { id: "4", problemName: "Valid Parentheses", difficulty: "Easy", company: "Meta", date: "3 days ago", status: "Solved" },
-    { id: "5", problemName: "Merge Intervals", difficulty: "Medium", company: "Uber", date: "5 days ago", status: "Pending" },
 ];
 
-export function RecentActivity({ activities = mockActivity }: { activities?: ActivityItem[] }) {
+const difficultyStyle: Record<string, string> = {
+    Easy: "border-emerald-500/20 text-emerald-500 bg-emerald-500/10",
+    Medium: "border-yellow-500/20 text-yellow-500 bg-yellow-500/10",
+    Hard: "border-red-500/20 text-red-500 bg-red-500/10",
+};
+
+const statusIcon = {
+    Solved: <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />,
+    Failed: <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />,
+    Pending: <Clock className="w-3.5 h-3.5 text-yellow-500 shrink-0" />,
+};
+
+const statusText: Record<string, string> = {
+    Solved: "text-green-500",
+    Failed: "text-red-500",
+    Pending: "text-zinc-400",
+};
+
+export function RecentActivity({ activities = [] }: { activities?: ActivityItem[] }) {
+    const displayActivities = activities.length > 0 ? activities : mockActivity;
+
     return (
-        <Card className="border-zinc-800 bg-zinc-950/50">
-            <CardHeader>
+        <Card className="border-zinc-800 bg-zinc-950/50 min-h-[300px]">
+            <CardHeader className="pb-2">
                 <CardTitle className="text-lg text-zinc-100">Recent Activity</CardTitle>
             </CardHeader>
-            <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow className="border-zinc-800 hover:bg-zinc-900/50">
-                            <TableHead className="text-zinc-400">Problem</TableHead>
-                            <TableHead className="text-zinc-400">Difficulty</TableHead>
-                            <TableHead className="text-zinc-400">Company</TableHead>
-                            <TableHead className="text-zinc-400">Status</TableHead>
-                            <TableHead className="text-zinc-400 text-right">Last Practiced</TableHead>
-                            <TableHead className="w-[50px]"></TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {activities.map((activity) => (
-                            <TableRow key={activity.id} className="border-zinc-800 hover:bg-zinc-900/50">
-                                <TableCell className="font-medium text-zinc-200">{activity.problemName}</TableCell>
-                                <TableCell>
-                                    <Badge
-                                        variant="outline"
-                                        className={`
-                      ${activity.difficulty === 'Easy' ? 'border-emerald-500/20 text-emerald-500 bg-emerald-500/10' : ''}
-                      ${activity.difficulty === 'Medium' ? 'border-yellow-500/20 text-yellow-500 bg-yellow-500/10' : ''}
-                      ${activity.difficulty === 'Hard' ? 'border-red-500/20 text-red-500 bg-red-500/10' : ''}
-                    `}
-                                    >
-                                        {activity.difficulty}
-                                    </Badge>
-                                </TableCell>
-                                <TableCell className="text-zinc-400">{activity.company}</TableCell>
-                                <TableCell>
-                                    <div className="flex items-center gap-2">
-                                        {activity.status === 'Solved' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-                                        {activity.status === 'Failed' && <XCircle className="w-4 h-4 text-red-500" />}
-                                        {activity.status === 'Pending' && <Clock className="w-4 h-4 text-yellow-500" />}
-                                        <span className="text-zinc-300">{activity.status}</span>
-                                    </div>
-                                </TableCell>
-                                <TableCell className="text-right text-zinc-500">{activity.date}</TableCell>
-                                <TableCell>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-100">
-                                                <MoreHorizontal className="h-4 w-4" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800 text-zinc-200">
-                                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                            <DropdownMenuItem className="focus:bg-zinc-800 cursor-pointer">Reconstruct</DropdownMenuItem>
-                                            <DropdownMenuItem className="focus:bg-zinc-800 cursor-pointer">View Details</DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+            <CardContent className="p-0 sm:p-6 sm:pt-0">
+                {/* Mobile: Card list */}
+                <div className="flex flex-col divide-y divide-zinc-800 sm:hidden">
+                    {displayActivities.map((a) => (
+                        <Link key={a.id} href="/dashboard/history" className="flex flex-col gap-1.5 px-4 py-3 hover:bg-zinc-900/40 transition-colors">
+                            <div className="flex items-start justify-between gap-2">
+                                <span className="font-semibold text-zinc-200 text-sm leading-tight">{a.problemName}</span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                    {statusIcon[a.status]}
+                                    <span className={`text-xs ${statusText[a.status]}`}>{a.status}</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${difficultyStyle[a.difficulty]}`}>
+                                    {a.difficulty}
+                                </Badge>
+                                <span className="text-xs text-zinc-500">{a.company}</span>
+                                <span className="text-xs text-zinc-600 ml-auto">{a.date}</span>
+                            </div>
+                        </Link>
+                    ))}
+                </div>
+
+                {/* Desktop: Table */}
+                <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="border-b border-zinc-800">
+                                <th className="text-left py-2 px-3 text-zinc-400 font-medium">Problem</th>
+                                <th className="text-left py-2 px-3 text-zinc-400 font-medium">Difficulty</th>
+                                <th className="text-left py-2 px-3 text-zinc-400 font-medium">Company</th>
+                                <th className="text-left py-2 px-3 text-zinc-400 font-medium">Status</th>
+                                <th className="text-right py-2 px-3 text-zinc-400 font-medium">Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {displayActivities.map((a) => (
+                                <tr key={a.id} className="border-b border-zinc-800/60 hover:bg-zinc-900/40 transition-colors">
+                                    <td className="py-2.5 px-3 font-semibold text-zinc-200">{a.problemName}</td>
+                                    <td className="py-2.5 px-3">
+                                        <Badge variant="outline" className={difficultyStyle[a.difficulty]}>{a.difficulty}</Badge>
+                                    </td>
+                                    <td className="py-2.5 px-3 text-zinc-400">{a.company}</td>
+                                    <td className="py-2.5 px-3">
+                                        <div className="flex items-center gap-1.5">
+                                            {statusIcon[a.status]}
+                                            <span className={statusText[a.status]}>{a.status}</span>
+                                        </div>
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right text-xs text-zinc-500 whitespace-nowrap">{a.date}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </CardContent>
         </Card>
     );

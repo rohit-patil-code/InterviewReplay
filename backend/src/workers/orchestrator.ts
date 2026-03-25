@@ -1,14 +1,13 @@
 import { EdgeCaseAgent } from './agents/edgeCaseAgent';
 import { ScriptAgent } from './agents/scriptAgent';
 import { SolutionAgent } from './agents/solutionAgent';
-import pg from 'pg';
+import { Pool } from 'pg';
 import path from 'path';
 import os from 'os';
 import fs from 'fs/promises';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 export const generateTestCasesFlow = async (problemId: string, description: string) => {
-    const { Pool } = pg;
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
     const s3Client = new S3Client({
@@ -52,8 +51,14 @@ export const generateTestCasesFlow = async (problemId: string, description: stri
         // --- PHASE 3: Solution Generation ---
         console.log(`[Orchestrator - Phase 3] Agent 5/6: Generating Optimal Solution and Starter Code using Schema...`);
         const schemaString = JSON.stringify(scriptData.generationSchema);
+        
         // Pass a sample of the generated input so the Solution Agent knows EXACTLY what schema it is parsing
-        const sampleInputPayload = await fs.readFile(path.join(tmpDir, 'input_1.txt'), 'utf8');
+        let sampleInputPayload = await fs.readFile(path.join(tmpDir, 'input_1.txt'), 'utf8');
+        
+        // CRITICAL: Truncate large inputs to avoid Groq TPM/TPD limits (Llama-3.3-70b often has 12k token limits)
+        if (sampleInputPayload.length > 2000) {
+            sampleInputPayload = sampleInputPayload.substring(0, 2000) + "\n...[TRUNCATED FOR LLM CONTEXT]";
+        }
         
         const solutionData = await solutionAgent.generateAndVerifySolution(description, schemaString, tmpDir, sampleInputPayload);
 
@@ -125,5 +130,6 @@ export const generateTestCasesFlow = async (problemId: string, description: stri
         } catch (e) {
             console.error(`[Orchestrator] Warning: Cleanup of sandbox failed: `, e);
         }
+        await pool.end();
     }
 };

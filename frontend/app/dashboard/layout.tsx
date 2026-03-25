@@ -31,7 +31,6 @@ import { useUser } from "@/components/providers/UserProvider";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Practice", href: "/dashboard/practice", icon: Code2 },
   { label: "History", href: "/dashboard/history", icon: History },
   { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
@@ -104,7 +103,8 @@ export default function DashboardLayout({
                 </Avatar>
                 <div className="flex-1 overflow-hidden">
                   <p className="text-sm font-medium truncate">
-                    {user?.first_name ? `${user.first_name} ${user.last_name || ''}` : 'User'}
+                    {user?.display_name || (user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : 'User')}
+
                   </p>
                   <p className="text-xs text-muted-foreground truncate">{user?.email || 'Loading...'}</p>
                 </div>
@@ -113,7 +113,7 @@ export default function DashboardLayout({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 mb-2">
               <DropdownMenuItem asChild>
-                <Link href="/profile" className="cursor-pointer flex items-center gap-2">
+                <Link href="/dashboard/profile" className="cursor-pointer flex items-center gap-2">
                   <User className="h-4 w-4" /> Profile
                 </Link>
               </DropdownMenuItem>
@@ -183,7 +183,8 @@ export default function DashboardLayout({
                         </Avatar>
                         <div className="flex-1 overflow-hidden">
                           <p className="text-sm font-medium truncate">
-                            {user?.first_name ? `${user.first_name} ${user.last_name || ''}` : 'User'}
+                            {user?.display_name || (user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : 'User')}
+
                           </p>
                           <p className="text-xs text-muted-foreground truncate">{user?.email || 'Loading...'}</p>
                         </div>
@@ -191,7 +192,7 @@ export default function DashboardLayout({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-56 mb-2">
                       <DropdownMenuItem asChild>
-                        <Link href="/profile" className="cursor-pointer flex items-center gap-2">
+                        <Link href="/dashboard/profile" className="cursor-pointer flex items-center gap-2">
                           <User className="h-4 w-4" /> Profile
                         </Link>
                       </DropdownMenuItem>
@@ -222,7 +223,7 @@ export default function DashboardLayout({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 mt-2">
               <DropdownMenuItem asChild>
-                <Link href="/profile" className="cursor-pointer flex items-center gap-2">
+                <Link href="/dashboard/profile" className="cursor-pointer flex items-center gap-2">
                   <User className="h-4 w-4" /> Profile
                 </Link>
               </DropdownMenuItem>

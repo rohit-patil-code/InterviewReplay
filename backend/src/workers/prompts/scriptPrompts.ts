@@ -17,6 +17,7 @@ CRITICAL SCRIPT FORMATTING:
 1. The script MUST be formatted with proper newlines (\\n) and indentation. DO NOT output the script as a single giant line.
 2. DO NOT include any markdown formatting, backticks, or explanatory text like "Here is your script" or "Node.js" inside the string. It must be ONLY actual valid JavaScript code.
 3. MAKE SURE to output valid JSON object syntax for data formatting instead of raw string replaces when mapping arrays/data. Example: \`let outputStr = JSON.stringify(result)\` instead of replace regex manipulation.
+4. SINGLE FILE RULE: The script MUST be entirely self-contained. DO NOT use \`require()\` to import any local files (e.g., \`require('./...')\`). You may only \`require\` built-in Node.js modules like \`fs\`, \`path\`, and \`crypto\`. All generation logic must be within this single script.
 
 PROBLEM DESCRIPTION:
 """
