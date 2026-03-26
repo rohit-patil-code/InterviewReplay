@@ -44,19 +44,30 @@ import {
     Pencil,
     Trash2,
     FileQuestion,
-    Loader2
+    Loader2,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
+    RotateCcw
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { authApi } from "@/lib/api";
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
+import { 
+    Select, 
+    SelectContent, 
+    SelectItem, 
+    SelectTrigger, 
+    SelectValue 
+} from "@/components/ui/select";
 
 interface Problem {
     id: string;
     title: string;
     company: string;
     difficulty: string;
-    status?: string; // Optional for now as DB might not have it yet
+    status?: string; 
     created_at: string;
 }
 
@@ -66,47 +77,83 @@ const DifficultyBadge = ({ level }: { level: string }) => {
         medium: "bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 border-yellow-500/20",
         hard: "bg-red-500/10 text-red-500 hover:bg-red-500/20 border-red-500/20",
     };
-    // Fallback for case sensitivity or unknown levels
     const colorClass = colors[level.toLowerCase()] || colors["medium"];
     return <Badge variant="outline" className={colorClass}>{level}</Badge>;
 };
 
-const fetcher = async () => {
-    const response = await authApi.getProblems();
-    return response.data.problems as Problem[];
-};
-
 export default function DashboardPage() {
-    const [problemToDelete, setProblemToDelete] = useState<string | null>(null);
     const router = useRouter();
+    
+    // Filter & Sort State
+    const [search, setSearch] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+    const [difficulty, setDifficulty] = useState("all");
+    const [company, setCompany] = useState("all");
+    const [sort, setSort] = useState("newest");
+    const [problemToDelete, setProblemToDelete] = useState<string | null>(null);
+
+    // Search Debounce
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(search);
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [search]);
 
     const { data: problems = [], isLoading: loading, mutate } = useSWR<Problem[]>(
-        "problems",
-        fetcher,
+        ["problems", debouncedSearch, difficulty, company, sort],
+        async () => {
+            const response = await authApi.getProblems({
+                search: debouncedSearch,
+                difficulty,
+                company,
+                sort
+            });
+            return response.data.problems as Problem[];
+        },
         { refreshInterval: 3000 }
     );
 
+    // Extract unique companies from fetched problems for the filter dropdown
+    // Note: In a real app, this might come from a separate metadata API
+    const [uniqueCompanies, setUniqueCompanies] = useState<string[]>([]);
+    
+    useEffect(() => {
+        if (problems && problems.length > 0 && company === 'all' && !debouncedSearch) {
+             const companies = Array.from(new Set(problems.map(p => p.company))).sort();
+             setUniqueCompanies(companies);
+        }
+    }, [problems]);
+
     const handleDelete = async () => {
         if (!problemToDelete) return;
-
         try {
             await authApi.deleteProblem(problemToDelete);
-            // Refresh the list
             await mutate();
         } catch (error) {
             console.error("Failed to delete problem:", error);
         } finally {
-            setProblemToDelete(null); // Close dialog
+            setProblemToDelete(null);
         }
     };
 
-    if (loading) {
-        return (
-            <div className="flex h-[50vh] items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-        );
-    }
+    const handleReset = () => {
+        setSearch("");
+        setDebouncedSearch("");
+        setDifficulty("all");
+        setCompany("all");
+        setSort("newest");
+    };
+
+    const toggleSort = (field: string) => {
+        if (field === 'difficulty') {
+            setSort(sort === 'difficulty_asc' ? 'difficulty_desc' : 'difficulty_asc');
+        } else if (field === 'title') {
+            setSort(sort === 'title_asc' ? 'title_desc' : 'title_asc');
+        } else {
+            setSort(sort === 'newest' ? 'oldest' : 'newest');
+        }
+    };
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -127,22 +174,68 @@ export default function DashboardPage() {
             </div>
 
             {/* 2. Filter Bar */}
-            <div className="flex flex-col sm:flex-row gap-4 items-center bg-card p-4 rounded-xl border border-border/50 shadow-sm">
-                <div className="relative flex-1 w-full">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        placeholder="Search by title, company, or tag..."
-                        className="pl-9 bg-background/50 border-border/50 focus-visible:ring-1"
-                    />
-                </div>
-                <div className="flex gap-2 w-full sm:w-auto">
-                    <Button variant="outline" className="gap-2 w-full sm:w-auto text-muted-foreground border-border/50 bg-background/50">
-                        <Filter className="h-4 w-4" />
-                        Status: All
-                    </Button>
-                    <Button variant="ghost" className="hidden sm:inline-flex text-muted-foreground text-xs">
-                        Reset
-                    </Button>
+            <div className="space-y-4">
+                <div className="flex flex-col lg:flex-row gap-4 items-center bg-card p-4 rounded-xl border border-border/50 shadow-sm">
+                    <div className="relative flex-1 w-full">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search by title, company, or tag..."
+                            className="pl-9 bg-background/50 border-border/50 focus-visible:ring-1"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 w-full lg:w-auto">
+                        {/* Difficulty Filter */}
+                        <Select value={difficulty} onValueChange={setDifficulty}>
+                            <SelectTrigger className="bg-background/50 border-border/50">
+                                <SelectValue placeholder="Difficulty" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Difficulties</SelectItem>
+                                <SelectItem value="Easy">Easy</SelectItem>
+                                <SelectItem value="Medium">Medium</SelectItem>
+                                <SelectItem value="Hard">Hard</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        {/* Company Filter */}
+                        <Select value={company} onValueChange={setCompany}>
+                            <SelectTrigger className="bg-background/50 border-border/50">
+                                <SelectValue placeholder="Company" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Companies</SelectItem>
+                                {uniqueCompanies.map(c => (
+                                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
+                        {/* Sort Order */}
+                        <Select value={sort} onValueChange={setSort}>
+                            <SelectTrigger className="bg-background/50 border-border/50">
+                                <SelectValue placeholder="Sort By" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="newest">Newest First</SelectItem>
+                                <SelectItem value="oldest">Oldest First</SelectItem>
+                                <SelectItem value="difficulty_asc">Difficulty (Easy to Hard)</SelectItem>
+                                <SelectItem value="difficulty_desc">Difficulty (Hard to Easy)</SelectItem>
+                                <SelectItem value="title_asc">Title (A-Z)</SelectItem>
+                                <SelectItem value="title_desc">Title (Z-A)</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Button 
+                            variant="outline" 
+                            className="gap-2 text-muted-foreground border-border/50 bg-background/50"
+                            onClick={handleReset}
+                        >
+                            <RotateCcw className="h-4 w-4" />
+                            Reset
+                        </Button>
+                    </div>
                 </div>
             </div>
 
@@ -151,16 +244,39 @@ export default function DashboardPage() {
                 <Table>
                     <TableHeader className="bg-muted/50">
                         <TableRow className="hover:bg-transparent border-border/50">
-                            <TableHead >Problem Name</TableHead>
+                            <TableHead className="cursor-pointer hover:text-primary transition-colors" onClick={() => toggleSort('title')}>
+                                <div className="flex items-center gap-1">
+                                    Problem Name
+                                    {sort.includes('title') ? (sort === 'title_asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                                </div>
+                            </TableHead>
                             <TableHead>Company</TableHead>
-                            <TableHead>Difficulty</TableHead>
+                            <TableHead className="cursor-pointer hover:text-primary transition-colors" onClick={() => toggleSort('difficulty')}>
+                                <div className="flex items-center gap-1">
+                                    Difficulty
+                                    {sort.includes('difficulty') ? (sort === 'difficulty_asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                                </div>
+                            </TableHead>
                             <TableHead>Test Cases</TableHead>
-                            <TableHead>Created</TableHead>
-                            <TableHead >Actions</TableHead>
+                            <TableHead className="cursor-pointer hover:text-primary transition-colors" onClick={() => toggleSort('date')}>
+                                <div className="flex items-center gap-1">
+                                    Created
+                                    {sort === 'newest' ? <ArrowDown className="h-3 w-3 text-primary" /> : sort === 'oldest' ? <ArrowUp className="h-3 w-3 text-primary" /> : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                                </div>
+                            </TableHead>
+                            <TableHead>Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {problems.length > 0 ? (
+                        {loading ? (
+                            <TableRow>
+                                <TableCell colSpan={6} className="h-64 text-center">
+                                    <div className="flex items-center justify-center">
+                                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        ) : problems.length > 0 ? (
                             problems.map((problem) => (
                                 <TableRow
                                     key={problem.id}
@@ -253,11 +369,9 @@ export default function DashboardPage() {
                                             <FileQuestion className="h-8 w-8 opacity-50" />
                                         </div>
                                         <p className="text-lg font-medium">No problems found</p>
-                                        <p className="text-sm mb-4">You haven't reconstructed any problems yet.</p>
-                                        <Button variant="outline" className="gap-2" asChild>
-                                            <Link href="/dashboard/create">
-                                                <Plus className="h-4 w-4" /> Recall Problem
-                                            </Link>
+                                        <p className="text-sm mb-4">Try adjusting your filters or search query.</p>
+                                        <Button variant="outline" className="gap-2" onClick={handleReset}>
+                                            <RotateCcw className="h-4 w-4" /> Reset Filters
                                         </Button>
                                     </div>
                                 </TableCell>
@@ -269,4 +383,5 @@ export default function DashboardPage() {
         </div>
     );
 }
+
 

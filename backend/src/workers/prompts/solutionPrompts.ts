@@ -8,7 +8,7 @@ GENERATION SCHEMA FOR REFERENCE:
 ${generationSchema}
 """
 
-'starter_code' provides professional function signatures for Java, C++, and Python. The starter code MUST ONLY be the empty function signature and class definition. DO NOT INCLUDE ANY SOLUTION LOGIC OR COMMENTS.
+'starter_code' provides professional function signatures for Java, C++, and Python. The keys in the JSON MUST be strictly lowercased: "python", "java", "cpp". The starter code MUST ONLY be the empty function signature and class definition. DO NOT INCLUDE ANY SOLUTION LOGIC OR COMMENTS.
 
 'solution_script' MUST be a raw Node.js script (as a string) that reads 'input_x.txt', parses the data, runs an optimal solution to the problem, and writes the exact expected output to 'output_x.txt'.
 The script MUST do this in a loop for x=1 to 15 synchronously (e.g. using fs.readFileSync and fs.writeFileSync). DO NOT use async/await for file operations. The script MUST actually execute itself at the bottom of the file!

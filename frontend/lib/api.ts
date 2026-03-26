@@ -33,7 +33,7 @@ export const authApi = {
 
     // Problems
     createProblem: (data: any) => api.post("/problems", data),
-    getProblems: () => api.get("/problems"),
+    getProblems: (params?: any) => api.get("/problems", { params }),
     getProblem: (id: string) => api.get(`/problems/${id}`),
     updateProblem: (id: string, data: any) => api.put(`/problems/${id}`, data),
     deleteProblem: (id: string) => api.delete(`/problems/${id}`),

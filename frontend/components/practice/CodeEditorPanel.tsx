@@ -6,7 +6,7 @@ import { LANGUAGES } from "./constants";
 
 interface CodeEditorPanelProps {
     language: { id: string; name: string; defaultCode: string };
-    setLanguage: (lang: any) => void;
+    onLanguageChange: (langId: string) => void;
     code: string;
     setCode: (code: string) => void;
     handleReset: () => void;
@@ -14,25 +14,18 @@ interface CodeEditorPanelProps {
 
 export function CodeEditorPanel({
     language,
-    setLanguage,
+    onLanguageChange,
     code,
     setCode,
     handleReset,
 }: CodeEditorPanelProps) {
-    
-    const handleLanguageChange = (langId: string) => {
-        const selected = LANGUAGES.find(l => l.id === langId);
-        if (selected) {
-            setLanguage(selected);
-        }
-    };
 
     return (
         <div className="flex flex-col h-full bg-zinc-950 min-h-[400px]">
             {/* Editor Toolbar */}
             <div className="h-12 border-b border-border/40 flex items-center justify-between px-4 bg-zinc-900 shrink-0">
                 <div className="flex items-center gap-2">
-                    <Select value={language.id} onValueChange={handleLanguageChange}>
+                    <Select value={language.id} onValueChange={onLanguageChange}>
                         <SelectTrigger className="h-8 w-[140px] bg-zinc-800 border-zinc-700 text-xs text-zinc-200">
                             <SelectValue />
                         </SelectTrigger>

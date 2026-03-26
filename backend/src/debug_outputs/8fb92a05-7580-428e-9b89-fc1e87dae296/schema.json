@@ -1,0 +1,14 @@
+{
+  "type": "object",
+  "properties": {
+    "s": {
+      "type": "string",
+      "min_length": 90000,
+      "max_length": 100000,
+      "character_set": "abcdefghijklmnopqrstuvwxyz"
+    }
+  },
+  "order": [
+    "s"
+  ]
+}

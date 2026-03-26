@@ -101,12 +101,21 @@ export const createProblem = async (req: Request, res: Response, next: NextFunct
 export const getMyProblems = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = (req as any).user.userId;
-        const problems = await problemRepository.findByUserId(userId);
+        const { search, difficulty, company, sort } = req.query;
+        
+        const problems = await problemRepository.findByUserId(userId, {
+            search: search as string,
+            difficulty: difficulty as string,
+            company: company as string,
+            sort: sort as string
+        });
+        
         res.status(200).json({ problems });
     } catch (error) {
         next(error);
     }
 };
+
 
 export const deleteProblem = async (req: Request, res: Response, next: NextFunction) => {
     try {

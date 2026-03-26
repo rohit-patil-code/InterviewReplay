@@ -43,6 +43,19 @@ export default function PracticePage() {
     const [isExecuting, setIsExecuting] = useState(false);
     const [executionResults, setExecutionResults] = useState<any>(null);
 
+    const getStarterCodeFromProblem = (problem: Problem | null, langId: string) => {
+        if (!problem?.starter_code) return null;
+        const starterCode = problem.starter_code;
+        // Case-insensitive lookup (matching 'python' with 'Python', 'cpp' with 'C++', etc.)
+        const matchedKey = Object.keys(starterCode).find(
+            key => key.toLowerCase() === langId.toLowerCase() || 
+                   (langId === 'cpp' && key === 'C++') ||
+                   (langId === 'python' && key === 'Python') ||
+                   (langId === 'java' && key === 'Java')
+        );
+        return matchedKey ? starterCode[matchedKey] : null;
+    };
+
     useEffect(() => {
         const fetchProblem = async () => {
             try {
@@ -55,14 +68,17 @@ export default function PracticePage() {
                 const initialLang = LANGUAGES.find(l => l.id === savedLangId) || LANGUAGES[0];
                 setLanguage(initialLang);
 
+
                 // Priority 1: Inject isolated code draft actively sitting natively in localStorage
                 // Priority 2: Inject AI generic starter code mappings from DB
                 // Priority 3: Fallback on default class templates
                 const cachedCode = localStorage.getItem(`problem-draft-${fetchedProblem.id}-${initialLang.id}`);
+                const dbStarterCode = getStarterCodeFromProblem(fetchedProblem, initialLang.id);
+
                 if (cachedCode) {
                     setCode(cachedCode);
-                } else if (fetchedProblem?.starter_code && fetchedProblem.starter_code[initialLang.id]) {
-                    setCode(fetchedProblem.starter_code[initialLang.id]);
+                } else if (dbStarterCode) {
+                    setCode(dbStarterCode);
                 } else {
                     setCode(initialLang.defaultCode);
                 }
@@ -86,10 +102,12 @@ export default function PracticePage() {
 
         if (problem) {
             const cachedCode = localStorage.getItem(`problem-draft-${problem.id}-${langId}`);
+            const dbStarterCode = getStarterCodeFromProblem(problem, langId);
+
             if (cachedCode) {
                 setCode(cachedCode);
-            } else if (problem.starter_code && problem.starter_code[langId]) {
-                setCode(problem.starter_code[langId]);
+            } else if (dbStarterCode) {
+                setCode(dbStarterCode);
             } else {
                 setCode(selected.defaultCode);
             }
@@ -104,8 +122,9 @@ export default function PracticePage() {
         // Discard local modifications restoring original AI/Template baseline cleanly
         localStorage.removeItem(`problem-draft-${problem.id}-${language.id}`);
 
-        if (problem.starter_code && problem.starter_code[language.id]) {
-            setCode(problem.starter_code[language.id]);
+        const dbStarterCode = getStarterCodeFromProblem(problem, language.id);
+        if (dbStarterCode) {
+            setCode(dbStarterCode);
         } else {
             setCode(language.defaultCode);
         }
@@ -158,7 +177,7 @@ export default function PracticePage() {
     return (
         <div className="flex flex-col h-[100dvh] lg:h-[calc(100vh-2rem)] my-0 mx-0 lg:my-4 lg:mx-4 border-none lg:border lg:border-border rounded-none lg:rounded-xl shadow-none lg:shadow-2xl overflow-hidden bg-background">
             {/* Header Toolbar */}
-            <PracticeHeader 
+            <PracticeHeader
                 problem={{ title: problem.title, company: problem.company }}
                 isExecuting={isExecuting}
                 executionResults={executionResults}
@@ -167,49 +186,49 @@ export default function PracticePage() {
 
             {/* Split Workspace */}
             <div className="flex-1 overflow-hidden p-0 lg:p-2 bg-muted/20 lg:bg-transparent">
-                
+
                 {/* --- DESKTOP VIEW (SPLIT PANE) --- */}
                 <div className="hidden lg:block h-full">
                     <ResizablePanelGroup direction="horizontal" className="rounded-lg border bg-card">
 
-                    {/* LEFT PANE: DESCRIPTION */}
-                    <ResizablePanel defaultSize={45} minSize={30}>
-                        <ScrollArea className="h-full">
-                            <ProblemDescription problem={problem} aiData={aiData} />
-                        </ScrollArea>
-                    </ResizablePanel>
+                        {/* LEFT PANE: DESCRIPTION */}
+                        <ResizablePanel defaultSize={45} minSize={30}>
+                            <ScrollArea className="h-full">
+                                <ProblemDescription problem={problem} aiData={aiData} />
+                            </ScrollArea>
+                        </ResizablePanel>
 
-                    <ResizableHandle withHandle className="bg-border hover:bg-primary/50 transition-colors w-2" />
+                        <ResizableHandle withHandle className="bg-border hover:bg-primary/50 transition-colors w-2" />
 
-                    {/* RIGHT PANE: EDITOR & TEST CASES */}
-                    <ResizablePanel defaultSize={55} minSize={30}>
-                        <ResizablePanelGroup direction="vertical">
+                        {/* RIGHT PANE: EDITOR & TEST CASES */}
+                        <ResizablePanel defaultSize={55} minSize={30}>
+                            <ResizablePanelGroup direction="vertical">
 
-                            {/* TOP: EDITOR */}
-                            <ResizablePanel defaultSize={70} minSize={20}>
-                                <CodeEditorPanel 
-                                    language={language}
-                                    setLanguage={setLanguage}
-                                    code={code}
-                                    setCode={setCode}
-                                    handleReset={handleReset}
-                                />
-                            </ResizablePanel>
+                                {/* TOP: EDITOR */}
+                                <ResizablePanel defaultSize={70} minSize={20}>
+                                    <CodeEditorPanel
+                                        language={language}
+                                        onLanguageChange={handleLanguageChange}
+                                        code={code}
+                                        setCode={setCode}
+                                        handleReset={handleReset}
+                                    />
+                                </ResizablePanel>
 
-                            <ResizableHandle withHandle className="bg-border hover:bg-primary/50 transition-colors h-2" />
+                                <ResizableHandle withHandle className="bg-border hover:bg-primary/50 transition-colors h-2" />
 
-                            {/* BOTTOM: TEST CASES & RESULTS */}
-                            <ResizablePanel defaultSize={30} minSize={10}>
-                                <TestCasesPanel 
-                                    aiData={aiData}
-                                    isExecuting={isExecuting}
-                                    executionResults={executionResults}
-                                />
-                            </ResizablePanel>
+                                {/* BOTTOM: TEST CASES & RESULTS */}
+                                <ResizablePanel defaultSize={30} minSize={10}>
+                                    <TestCasesPanel
+                                        aiData={aiData}
+                                        isExecuting={isExecuting}
+                                        executionResults={executionResults}
+                                    />
+                                </ResizablePanel>
 
-                        </ResizablePanelGroup>
-                    </ResizablePanel>
-                </ResizablePanelGroup>
+                            </ResizablePanelGroup>
+                        </ResizablePanel>
+                    </ResizablePanelGroup>
                 </div>
 
                 {/* --- MOBILE VIEW (NATIVE SCROLL) --- */}
@@ -221,9 +240,9 @@ export default function PracticePage() {
 
                     {/* Code Editor */}
                     <div className="bg-zinc-950 w-full shrink-0 h-[500px] border-b flex flex-col">
-                        <CodeEditorPanel 
+                        <CodeEditorPanel
                             language={language}
-                            setLanguage={setLanguage}
+                            onLanguageChange={handleLanguageChange}
                             code={code}
                             setCode={setCode}
                             handleReset={handleReset}
@@ -232,7 +251,7 @@ export default function PracticePage() {
 
                     {/* Test Cases */}
                     <div className="bg-zinc-950 w-full shrink-0 min-h-[400px] flex flex-col pb-8">
-                        <TestCasesPanel 
+                        <TestCasesPanel
                             aiData={aiData}
                             isExecuting={isExecuting}
                             executionResults={executionResults}

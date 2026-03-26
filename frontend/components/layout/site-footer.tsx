@@ -3,12 +3,12 @@ import { Brain, Github, Twitter, Code2 } from "lucide-react";
 
 export function SiteFooter() {
     return (
-        <footer className="border-t bg-background py-12 md:py-16">
+        <footer className="border-t bg-background py-12 md:py-16 w-full">
             <div className="container mx-auto px-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-8 md:gap-12 mb-12">
 
                     {/* Col 1: Brand */}
-                    <div className="col-span-1 md:col-span-1 space-y-4">
+                    <div className="col-span-1 md:col-span-1 space-y-4 flex flex-col items-center md:items-start text-center md:text-left">
                         <div className="flex items-center gap-2">
                             <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
                                 <Brain className="h-5 w-5 text-primary" />
@@ -21,7 +21,7 @@ export function SiteFooter() {
                     </div>
 
                     {/* Col 2: Product */}
-                    <div className="col-span-1">
+                    <div className="col-span-1 flex flex-col items-center md:items-start text-center md:text-left">
                         <h3 className="font-semibold mb-4">Product</h3>
                         <ul className="space-y-3 text-sm text-muted-foreground">
                             <li><Link href="#features" className="hover:text-foreground transition-colors">Features</Link></li>
@@ -31,7 +31,7 @@ export function SiteFooter() {
                     </div>
 
                     {/* Col 3: Resources */}
-                    <div className="col-span-1">
+                    <div className="col-span-1 flex flex-col items-center md:items-start text-center md:text-left">
                         <h3 className="font-semibold mb-4">Resources</h3>
                         <ul className="space-y-3 text-sm text-muted-foreground">
                             <li><Link href="#" className="hover:text-foreground transition-colors">Blog</Link></li>
@@ -41,7 +41,7 @@ export function SiteFooter() {
                     </div>
 
                     {/* Col 4: Legal/Social Placeholder */}
-                    <div className="col-span-1">
+                    <div className="col-span-1 flex flex-col items-center md:items-start text-center md:text-left">
                         <h3 className="font-semibold mb-4">Connect</h3>
                         <div className="flex gap-4">
                             <Link href="#" className="text-muted-foreground hover:text-foreground">

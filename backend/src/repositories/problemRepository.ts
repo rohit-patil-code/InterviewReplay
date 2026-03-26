@@ -18,13 +18,53 @@ export const create = async (
     return result.rows[0];
 };
 
-export const findByUserId = async (userId: string): Promise<Problem[]> => {
-    const result = await pool.query(
-        `SELECT * FROM problems WHERE user_id = $1 ORDER BY created_at DESC`,
-        [userId]
-    );
+export interface FindProblemsOptions {
+    search?: string;
+    company?: string;
+    difficulty?: string;
+    sort?: string;
+}
+
+export const findByUserId = async (userId: string, options: FindProblemsOptions = {}): Promise<Problem[]> => {
+    let queryStr = 'SELECT * FROM problems WHERE user_id = $1';
+    const queryParams: any[] = [userId];
+    let paramIdx = 2;
+
+    if (options.search) {
+        queryStr += ` AND (title ILIKE $${paramIdx} OR company ILIKE $${paramIdx})`;
+        queryParams.push(`%${options.search}%`);
+        paramIdx++;
+    }
+
+    if (options.difficulty && options.difficulty !== 'all') {
+        queryStr += ` AND difficulty = $${paramIdx}`;
+        queryParams.push(options.difficulty);
+        paramIdx++;
+    }
+
+    if (options.company && options.company !== 'all') {
+        queryStr += ` AND company = $${paramIdx}`;
+        queryParams.push(options.company);
+        paramIdx++;
+    }
+
+    // Sorting logic
+    const sortFieldMap: Record<string, string> = {
+        'newest': 'created_at DESC',
+        'oldest': 'created_at ASC',
+        'difficulty_asc': 'CASE WHEN difficulty = \'Easy\' THEN 1 WHEN difficulty = \'Medium\' THEN 2 ELSE 3 END ASC',
+        'difficulty_desc': 'CASE WHEN difficulty = \'Easy\' THEN 1 WHEN difficulty = \'Medium\' THEN 2 ELSE 3 END DESC',
+        'title_asc': 'title ASC',
+        'title_desc': 'title DESC'
+    };
+
+    const orderBy = sortFieldMap[options.sort || 'newest'] || 'created_at DESC';
+    queryStr += ` ORDER BY ${orderBy}`;
+
+    const result = await pool.query(queryStr, queryParams);
     return result.rows;
 };
+
 
 export const deleteProblem = async (problemId: string, userId: string): Promise<boolean> => {
     // Ensure that a user can only delete their own problem
