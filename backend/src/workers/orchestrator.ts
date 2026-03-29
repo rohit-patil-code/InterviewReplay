@@ -51,15 +51,15 @@ export const generateTestCasesFlow = async (problemId: string, description: stri
         // --- PHASE 3: Solution Generation ---
         console.log(`[Orchestrator - Phase 3] Agent 5/6: Generating Optimal Solution and Starter Code using Schema...`);
         const schemaString = JSON.stringify(scriptData.generationSchema);
-        
+
         // Pass a sample of the generated input so the Solution Agent knows EXACTLY what schema it is parsing
         let sampleInputPayload = await fs.readFile(path.join(tmpDir, 'input_1.txt'), 'utf8');
-        
+
         // CRITICAL: Truncate large inputs to avoid Groq TPM/TPD limits (Llama-3.3-70b often has 12k token limits)
         if (sampleInputPayload.length > 2000) {
             sampleInputPayload = sampleInputPayload.substring(0, 2000) + "\n...[TRUNCATED FOR LLM CONTEXT]";
         }
-        
+
         const solutionData = await solutionAgent.generateAndVerifySolution(description, schemaString, tmpDir, sampleInputPayload);
 
         console.log(`[Orchestrator - Phase 3] Successfully computed outputs via Optimal AI Solver Execution.`);
@@ -111,6 +111,7 @@ export const generateTestCasesFlow = async (problemId: string, description: stri
         // Save the raw scripts to the local directory
         await fs.writeFile(path.join(debugDir, 'generator_script.js'), scriptData.inputGenerationScript);
         await fs.writeFile(path.join(debugDir, 'solution_script.js'), solutionData.solutionScript);
+        await fs.writeFile(path.join(debugDir, 'bruteforce_script.js'), solutionData.bruteforceScript);
         await fs.writeFile(path.join(debugDir, 'schema.json'), JSON.stringify(scriptData.generationSchema, null, 2));
 
         // Copy all 15 test case text files
@@ -122,11 +123,19 @@ export const generateTestCasesFlow = async (problemId: string, description: stri
         }
 
         console.log(`[Orchestrator - Debug Save] Saved sample I/O and bot scripts to ./debug_outputs/${problemId}`);
+    } catch (error: any) {
+        console.error(`[Orchestrator] FATAL ERROR in pipeline for problemId ${problemId}:`, error);
+        try {
+            await pool.query(`UPDATE problems SET status = 'failed' WHERE id = $1`, [problemId]);
+        } catch (dbErr) {
+            console.error(`[Orchestrator] Failed to update problem status to 'failed':`, dbErr);
+        }
+        throw error;
     } finally {
         // --- PHASE 6: Sandboxed Cleanup ---
         console.log(`[Orchestrator - Phase 6] Cleaning up local sandbox files from ${tmpDir}...`);
         try {
-            await fs.rm(tmpDir, { recursive: true, force: true });
+            await fs.rm(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 1000 });
         } catch (e) {
             console.error(`[Orchestrator] Warning: Cleanup of sandbox failed: `, e);
         }

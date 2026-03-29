@@ -24,22 +24,22 @@ export class SandboxRunner {
             // Map the host temp directory accurately into Docker safely isolated natively
             const volumeMap = `"${tmpDir}:/usr/src/app"`;
             // Execute the mapped script explicitly bounded safely
-            const runCmd = `docker run --rm --net none --memory 256m --cpus 1 -v ${volumeMap} -w /usr/src/app node:20-slim node script.js`;
-            
+            const runCmd = `docker run --rm --net none --memory 1024m --cpus 1 -v ${volumeMap} -w /usr/src/app node:20-slim sh -c "timeout -s KILL ${Math.ceil(timeoutMs / 1000)} node script.js"`;
+
             const { stdout, stderr } = await execPromise(runCmd, {
                 timeout: timeoutMs,
                 cwd: tmpDir
             });
             return { stdout, stderr };
         } catch (error: any) {
-            if (error.killed) {
+            if (error.killed || error.code === 137) {
                 throw new Error(`Time Limit Exceeded: Script exceeded ${timeoutMs}ms runtime bounds.`);
             }
             throw new Error(error.message || "Unknown Node runtime error natively globally crashed the underlying matrix bounds.");
         } finally {
             // Clean up the temp sandbox dir only if we created it natively
             if (!customCwd) {
-                await fs.rm(tmpDir, { recursive: true, force: true }).catch(console.error);
+                await fs.rm(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 1000 }).catch(console.error);
             }
         }
     }
@@ -67,11 +67,11 @@ export class SandboxRunner {
         const id = crypto.randomUUID();
         const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), `oarecall-batch-${id}-`));
         const volumeMap = `"${tmpDir}:/usr/src/app"`;
-        
+
         try {
             // 1. Resolve architectural mapping strictly bound via decoupled structures seamlessly
             const generator = GeneratorFactory.get(language);
-            
+
             // 2. Hydrate isolated template generation uniquely
             const { fullScript, scriptName, dockerCmd, setupPromises } = generator.generate({
                 userCode,
@@ -85,14 +85,20 @@ export class SandboxRunner {
 
             // 3. Persist I/O structures safely
             await Promise.all(setupPromises);
-            
+
             // Reconstruct the explicit JSON Array for universal fallback parsing natively
             const joinedValidJsonArray = `[${testCaseInputs.map(t => t || "{}").join(',')}]`;
             await fs.writeFile(path.join(tmpDir, 'inputs.json'), joinedValidJsonArray, 'utf8');
             await fs.writeFile(path.join(tmpDir, scriptName), fullScript, 'utf8');
 
+            let boundDockerCmd = dockerCmd;
+            const tKill = Math.ceil(timeoutMs / 1000);
+            boundDockerCmd = boundDockerCmd.replace('python runner.py', `sh -c "timeout -s KILL ${tKill} python runner.py"`);
+            boundDockerCmd = boundDockerCmd.replace('node runner.js', `sh -c "timeout -s KILL ${tKill} node runner.js"`);
+            boundDockerCmd = boundDockerCmd.replace('sh -c "', `sh -c "timeout -s KILL ${tKill} `);
+
             // 4. Secure Docker Sandbox Bootstrapping
-            const { stdout, stderr } = await execPromise(dockerCmd, {
+            const { stdout, stderr } = await execPromise(boundDockerCmd, {
                 timeout: timeoutMs,
                 cwd: tmpDir,
                 maxBuffer: 1024 * 1024 * 50 // 50MB parsing natively bound
@@ -115,7 +121,7 @@ export class SandboxRunner {
                 }));
             }
         } catch (error: any) {
-            if (error.killed) {
+            if (error.killed || error.code === 137) {
                 return testCaseInputs.map(() => ({
                     success: false,
                     error: `Time Limit Exceeded: Executions exceeded ${timeoutMs}ms entirely mapping batch failures homogeneously.`
@@ -127,7 +133,7 @@ export class SandboxRunner {
             }));
         } finally {
             // Unlink container matrix
-            await fs.rm(tmpDir, { recursive: true, force: true }).catch(console.error);
+            await fs.rm(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 1000 }).catch(console.error);
         }
     }
 }

@@ -5,13 +5,16 @@ Given the problem description, you must output a strict JSON object containing t
 'generation_schema' defines how the backend should mathematically generate valid massive test cases.
 Supported types: integer, float, string, array, matrix, object, multi_case, tree, graph.
 For 'object' type, include an 'order' array specifying the parameter sequence.
-CRITICAL INSTRUCTION FOR TLE TESTING: For properties that dictate SIZE or LENGTH (like array size, string length, matrix dimensions, nodes in graph/tree), you MUST set 'min' to at least 90% of the theoretical maximum constraint to guarantee massively large test cases. If N <= 10^5, set min: 90000, max: 100000. DO NOT output small fallback ranges like 1-10.
+CRITICAL DATA STRUCTURE RULE: Trees MUST be generated as strictly flat LeetCode-style arrays (e.g. [3, 9, 20, null, null, 15, 7]). Linked Lists MUST be generated as flat arrays (e.g. [1, 2, 3]). The execution sandbox will handle deserializing these arrays into actual memory objects. NEVER generate nested JSON objects for nodes.
+CRITICAL INSTRUCTION FOR TLE TESTING: For inputs x=1 to 5, generate mathematically small logical edge cases and base constraints. For inputs x=6 to 15, you MUST set properties that dictate SIZE or LENGTH (array size, string length, matrix dimensions) to at least 90% of the theoretical max to guarantee MASSIVELY large test cases (e.g., if N <= 10^5, set min: 90000, max: 100000). DO NOT output uniformly small tests.
 
 'input_generation_script' MUST be a raw Node.js script (as a string) that logically generates 15 massive test cases following the 'generation_schema' and writes them to 'input_x.txt'.
 The script MUST do this in a loop for x=1 to 15 synchronously (e.g. using fs.writeFileSync). DO NOT use async/await for file operations. The script MUST actually execute itself at the bottom of the file!
 CRITICAL PATHING RULE: You MUST resolve file paths natively using \`const filePath = path.join(process.cwd(), 'input_' + x + '.txt');\`. DO NOT hardcode absolute directories like \`C:\\Users\\...\`.
 
-CRITICAL I/O RULE: You MUST serialize all generated test cases into the text files using strictly \`JSON.stringify()\`. Do not use manual string concatenation, newlines, or CSV formats. The file must contain exactly one valid JSON array or JSON object representing the input arguments.
+CRITICAL I/O RULE: You MUST serialize all generated test cases into the text files using strictly \`JSON.stringify()\`. The file MUST contain EXACTLY ONE valid JSON Array. This array MUST contain the exact arguments in the exact order required by the problem's function signature. DO NOT output dictionaries or objects.
+*Example for 1 input (array):* \`[[1, 2, 3]]\`
+*Example for 2 inputs (int n, int[][] edges):* \`[5, [[0,1], [1,2]]]\`
 
 CRITICAL SCRIPT FORMATTING:
 1. The script MUST be formatted with proper newlines (\\n) and indentation. DO NOT output the script as a single giant line.

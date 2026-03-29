@@ -32,16 +32,46 @@ async function fetchS3File(s3Url: string): Promise<string> {
  */
 function sanitizeInputToJson(inputStr: string, schema: any): string {
     if (!inputStr) return "{}";
+
+    let order = schema.order;
+    if (!order) {
+        const propKeys = Object.keys(schema?.properties || {});
+        if (propKeys.length > 0) {
+            order = propKeys;
+        } else if (schema?.type && typeof schema.type === 'string' && schema.type !== 'object') {
+            order = ['single_arg'];
+        } else {
+            const realKeys = Object.keys(schema || {}).filter((k: string) => !['type','minDepth','maxDepth','edgeCases','minLength','maxLength','minSize','maxSize','minVal','maxVal','minN','maxN','min','max','min_depth','max_depth','null_probability','cases','items','order','properties'].includes(k));
+            order = realKeys.length > 0 ? realKeys : ['single_arg'];
+        }
+    }
+    let isSingleArg = order.length === 1 && order[0] === 'single_arg';
+
     try {
         const parsed = JSON.parse(inputStr);
         if (typeof parsed === 'object' && parsed !== null) {
+            if (isSingleArg) {
+                return JSON.stringify([parsed]);
+            }
             return inputStr;
         }
     } catch (e: any) { }
 
-    const order = schema.order || Object.keys(schema?.properties || schema || {});
+    if (isSingleArg && inputStr.includes('=')) {
+        const dynamicKeys = [];
+        const regex = /([a-zA-Z0-9_]+)\s*=/g;
+        let match;
+        while ((match = regex.exec(inputStr)) !== null) {
+            dynamicKeys.push(match[1]);
+        }
+        if (dynamicKeys.length > 1) {
+            order = dynamicKeys;
+            isSingleArg = false;
+        }
+    }
+
     if (order.length > 0) {
-        let jsonObj: any = {};
+        let argsArr: any[] = [];
         let matchedSomething = false;
 
         for (const key of order) {
@@ -51,15 +81,15 @@ function sanitizeInputToJson(inputStr: string, schema: any): string {
                 matchedSomething = true;
                 let valStr = match[1].trim();
                 try {
-                    jsonObj[key] = JSON.parse(valStr);
+                    argsArr.push(JSON.parse(valStr));
                 } catch (e: any) {
-                    jsonObj[key] = valStr;
+                    argsArr.push(valStr);
                 }
             }
         }
 
         if (matchedSomething) {
-            return JSON.stringify(jsonObj);
+            return JSON.stringify(argsArr);
         }
 
         if (order.length === 1) {
@@ -70,14 +100,15 @@ function sanitizeInputToJson(inputStr: string, schema: any): string {
             }
 
             try {
-                return JSON.stringify({ [order[0]]: JSON.parse(cleanStr) });
+                let p = JSON.parse(cleanStr);
+                return JSON.stringify([p]);
             } catch (e: any) {
                 cleanStr = cleanStr.replace(/^["'](.*)["']$/, '$1');
-                return JSON.stringify({ [order[0]]: cleanStr });
+                return JSON.stringify([cleanStr]);
             }
         }
     }
-    return JSON.stringify(inputStr);
+    return JSON.stringify([inputStr]);
 }
 
 export const executeCode = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

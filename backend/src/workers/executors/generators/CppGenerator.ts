@@ -7,7 +7,31 @@ export class CppGenerator implements CodeGenerator {
         const { userCode, className, functionName, schema, testCaseInputs, tmpDir, volumeMap } = context;
 
         const numTestCases = testCaseInputs.length;
-        const schemaKeys = schema.order || Object.keys(schema?.properties || schema || {});
+        let firstParsed: any = {};
+        try {
+            firstParsed = JSON.parse(testCaseInputs[0] || "{}");
+        } catch (e) {}
+
+        let schemaKeys = schema?.order;
+        if (!schemaKeys) {
+            if (Array.isArray(firstParsed)) {
+                schemaKeys = firstParsed.map((_, i) => String(i));
+            } else {
+                const propKeys = Object.keys(schema?.properties || {});
+                if (propKeys.length > 0) {
+                    schemaKeys = propKeys;
+                } else if (schema?.type && typeof schema.type === 'string' && schema.type !== 'object') {
+                    schemaKeys = ['single_arg'];
+                } else {
+                    const realKeys = Object.keys(schema || {}).filter((k: string) => !['type','minDepth','maxDepth','edgeCases','minLength','maxLength','minSize','maxSize','minVal','maxVal','minN','maxN','min','max','min_depth','max_depth','null_probability','cases','items','order','properties'].includes(k));
+                    if (realKeys.length > 0) {
+                        schemaKeys = realKeys;
+                    } else {
+                        schemaKeys = ['single_arg'];
+                    }
+                }
+            }
+        }
         const setupPromises: Promise<void>[] = [];
 
         const stringifyForCpp = (val: any): string => {
@@ -16,9 +40,9 @@ export class CppGenerator implements CodeGenerator {
             if (typeof val === 'boolean') return val ? '1' : '0';
             if (Array.isArray(val)) {
                 if (val.length === 0) return ""; 
-                if (Array.isArray(val[0])) return val.map(row => row.join(',')).join('\\n');
-                if (typeof val[0] === 'string') return val.join('\\n--END_OF_STRING--\\n');
-                return val.join(',');
+                if (Array.isArray(val[0])) return val.map(row => row.map((v: any) => v === null ? "null" : v).join(',')).join('\\n');
+                if (typeof val[0] === 'string') return val.map((v: any) => v === null ? "null" : v).join('\\n--END_OF_STRING--\\n');
+                return val.map((v: any) => v === null ? "null" : v).join(',');
             }
             return "";
         };
@@ -27,21 +51,54 @@ export class CppGenerator implements CodeGenerator {
         
         testCaseInputs.forEach((inputStr, tcIdx) => {
             let parsedInput = JSON.parse(inputStr || "{}");
-            if (Array.isArray(parsedInput) && parsedInput.length === 1 && typeof parsedInput[0] === 'object') {
-                parsedInput = parsedInput[0];
-            }
             schemaKeys.forEach((k: string, argIdx: number) => {
                 const argFile = path.join(tmpDir, `arg_${tcIdx}_${argIdx}.txt`);
-                setupPromises.push(fs.writeFile(argFile, stringifyForCpp(parsedInput[k]), 'utf8'));
+                let val = null;
+                if (Array.isArray(parsedInput) && parsedInput.length > 0) {
+                    if (parsedInput.length === 1 && typeof parsedInput[0] === 'object' && !Array.isArray(parsedInput[0]) && parsedInput[0][k] !== undefined) {
+                        val = parsedInput[0][k];
+                    } else {
+                        val = parsedInput[argIdx];
+                    }
+                } else if (typeof parsedInput === 'object' && parsedInput !== null) {
+                    val = parsedInput[k];
+                } else {
+                     val = parsedInput;
+                }
+                setupPromises.push(fs.writeFile(argFile, stringifyForCpp(val), 'utf8'));
             });
         });
 
-        let firstParsed = JSON.parse(testCaseInputs[0] || "{}");
-        if (Array.isArray(firstParsed) && firstParsed.length === 1 && typeof firstParsed[0] === 'object') firstParsed = firstParsed[0];
-
         schemaKeys.forEach((k: string, argIdx: number) => {
-            const val = firstParsed[k];
-            if (typeof val === 'string') {
+            let val = null;
+            if (Array.isArray(firstParsed) && firstParsed.length > 0) {
+                if (firstParsed.length === 1 && typeof firstParsed[0] === 'object' && !Array.isArray(firstParsed[0]) && firstParsed[0][k] !== undefined) {
+                    val = firstParsed[0][k];
+                } else {
+                    val = firstParsed[argIdx];
+                }
+            } else if (typeof firstParsed === 'object' && firstParsed !== null) {
+                val = firstParsed[k];
+            } else {
+                val = firstParsed;
+            }
+            
+            let schemaType = schema?.properties?.[k]?.type;
+            if (!schemaType && Array.isArray(schema?.order)) {
+                schemaType = schema.order[argIdx]?.type || schema.order[argIdx]?.dataType;
+            }
+            if (!schemaType) {
+                schemaType = schema?.type;
+                if (!schemaType && schema && typeof schema === 'object') {
+                    schemaType = schema[k];
+                }
+            }
+            const normType = String(schemaType).toLowerCase();
+            if (normType === 'treenode' || normType === 'tree') {
+                CppReaderGenerators.push(`buildTree(readString("arg_" + to_string(i) + "_${argIdx}.txt"))`);
+            } else if (normType === 'listnode' || normType === 'linked_list' || normType === 'list') {
+                CppReaderGenerators.push(`buildList(readString("arg_" + to_string(i) + "_${argIdx}.txt"))`);
+            } else if (typeof val === 'string') {
                 CppReaderGenerators.push(`readString("arg_" + to_string(i) + "_${argIdx}.txt")`);
             } else if (typeof val === 'number') {
                 CppReaderGenerators.push(Number.isInteger(val) ? `readInt("arg_" + to_string(i) + "_${argIdx}.txt")` : `readDouble("arg_" + to_string(i) + "_${argIdx}.txt")`);
@@ -64,8 +121,27 @@ export class CppGenerator implements CodeGenerator {
 #include <string>
 #include <sstream>
 #include <chrono>
+#include <queue>
+#include <algorithm>
 
 using namespace std;
+
+struct TreeNode {
+    int val;
+    TreeNode *left;
+    TreeNode *right;
+    TreeNode() : val(0), left(nullptr), right(nullptr) {}
+    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
+    TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}
+};
+
+struct ListNode {
+    int val;
+    ListNode *next;
+    ListNode() : val(0), next(nullptr) {}
+    ListNode(int x) : val(x), next(nullptr) {}
+    ListNode(int x, ListNode *next) : val(x), next(next) {}
+};
 
 string readString(const string& path) {
     ifstream ifs(path);
@@ -119,6 +195,62 @@ vector<string> readStringArray(const string& path) {
     }
     if(!content.empty()) res.push_back(content);
     return res;
+}
+
+TreeNode* buildTree(const string& data) {
+    if (data.empty() || data == "[]") return nullptr;
+    string s = data;
+    s.erase(remove(s.begin(), s.end(), '['), s.end());
+    s.erase(remove(s.begin(), s.end(), ']'), s.end());
+    if (s.empty()) return nullptr;
+    vector<string> parts;
+    stringstream ss(s);
+    string item;
+    while (getline(ss, item, ',')) {
+        item.erase(remove_if(item.begin(), item.end(), ::isspace), item.end());
+        parts.push_back(item);
+    }
+    if (parts.empty() || parts[0] == "null") return nullptr;
+    TreeNode* root = new TreeNode(stoi(parts[0]));
+    queue<TreeNode*> q;
+    q.push(root);
+    int i = 1;
+    while(!q.empty() && i < parts.size()) {
+        TreeNode* curr = q.front(); q.pop();
+        if (parts[i] != "null") {
+            curr->left = new TreeNode(stoi(parts[i]));
+            q.push(curr->left);
+        }
+        i++;
+        if (i < parts.size() && parts[i] != "null") {
+            curr->right = new TreeNode(stoi(parts[i]));
+            q.push(curr->right);
+        }
+        i++;
+    }
+    return root;
+}
+
+ListNode* buildList(const string& data) {
+    if (data.empty() || data == "[]") return nullptr;
+    string s = data;
+    s.erase(remove(s.begin(), s.end(), '['), s.end());
+    s.erase(remove(s.begin(), s.end(), ']'), s.end());
+    if (s.empty()) return nullptr;
+    vector<string> parts;
+    stringstream ss(s);
+    string item;
+    while (getline(ss, item, ',')) {
+        item.erase(remove_if(item.begin(), item.end(), ::isspace), item.end());
+        if(!item.empty() && item != "null") parts.push_back(item);
+    }
+    ListNode dummy(0);
+    ListNode* curr = &dummy;
+    for (const string& p : parts) {
+        curr->next = new ListNode(stoi(p));
+        curr = curr->next;
+    }
+    return dummy.next;
 }
 
 string toJSON(int val) { return to_string(val); }

@@ -9,6 +9,8 @@
   - User Authentication: Secure Email OTP and Google OAuth verification.
   - Practice Dashboard: Specialized coding arenas equipped with Monaco Editor for multiple languages.
   - AI Test Case Generation: Intelligent generation of trick/edge cases and mathematical generation schemas via Gemini AI.
+  - Dual-Solver Verification: Autonomous generation of both brute-force and optimal solvers that natively cross-validate mathematical correctness before publishing test cases.
+  - Self-Healing AI Reflection: Agents utilize strict JSON validation and execution sandboxing; if execution or schema matching fails, they recursively feed the explicit error back to the LLM for self-correction.
   - Background Processing: BullMQ workers handling heavy, asynchronous code execution and deterministic test generation.
   - Cloud Storage: Integration with AWS S3 for hosting millions of lines of test data.
 - Business Logic Summary: 
@@ -95,7 +97,7 @@ InterviewReplay/
 - Data Flow: The frontend communicates to the backend through stateless REST APIs authenticated via JWT HttpOnly cookies. When complex jobs (like AI processing) are requested, the backend shifts the workload to a Redis/BullMQ background queue.
 - Request Lifecycle: Reaches standard entry point -> Validated via Zod -> Authenticated via Middleware -> Processed by Service Layer -> Mutates Data in PG Repository Layer -> Responds with JSON.
 - Component Interaction & Background Processing:
-  Heavy operations like 10,000-line test case generations will lock physical threads, hence node `worker.mjs` runs independently. The API triggers an event in Redis, the Worker executes Gemini, deterministically builds math structures, spawns temporary child Node.js scripts internally using `exec()`, assesses algorithm outputs, and uploads directly from the disk memory to AWS S3. 
+  Heavy operations like 10,000-line test case generations will lock physical threads, hence node `worker.mjs` runs independently. The API triggers an event in Redis, the Worker executes Gemini, deterministically builds math structures, spawns temporary child Node.js scripts internally using `exec()` (within securely isolated 1024MB generic Docker sandboxes), rigorously assesses algorithm outputs via Dual-Solver self-healing comparison, and uploads directly from the disk memory to AWS S3. 
 
 [ Architecture ASCII Diagram ]
 
@@ -135,13 +137,12 @@ TEST CASE GENERATION FLOW (MAIN FEATURE SYSTEM):
 2. Express issues a job to `{test-case-generation}` queue containing the standard text problem description.
 3. API instantly returns a 202 Accepted, leaving the frontend unblocked to poll for status.
 4. BullMQ Worker dequeues the job.
-5. Step A: Worker prompts Gemini for 3 tricky edge cases derived from constraints and inserts into DB.
-6. Step B: Worker prompts Gemini for a math-oriented schema, strict parameter array (`order`), starter code signatures, and a deterministic Javascript `solution_script`.
-7. Step C: Worker parses generation schema. Uses loop 1 to 15 building arrays, matrices, string parameters procedurally up to memory constraints.
-8. Step D: Worker writes `input_1.txt` ... `input_15.txt`.
-9. Step E: Worker writes AI `temp_solver_id.js` to disk, executes it to read the local `inputs` and generate precise `outputs`.
-10. Step F: S3Client iterates over all 30 files, uploading them asynchronously to the AWS S3 Bucket.
-11. Step G: File URLs are mapped to `test_cases` inside PostgreSQL. DB status flips to `generated`. Job finishes.
+5. Phase 1 (Edge Cases): Worker prompts EdgeCaseAgent for 3 tricky edge cases derived from constraints and inserts into DB.
+6. Phase 2 (Input Generation): Worker prompts ScriptAgent for a generation schema and Javascript `input_generation_script`. It executes this natively, building 5 small arrays and 10 massive array matrices (up to 100k length) explicitly to test TLE limitations.
+7. Phase 3 (Dual-Solver Correctness): Worker prompts SolutionAgent for `bruteforce_script` and `optimal_script`. It synchronously tests both entirely independent scripts against the first 5 tests inside the sandbox. If outputs diverge, a Reflection Loop natively feeds the error trace back to the LLM to auto-repair the mathematics. 
+8. Phase 4 (State Saving): Worker generates remaining outputs (6 to 15). The orchestrator commits validated schema and specific class `starter_code` formatting to PostgreSQL.
+9. Phase 5 (S3 Upload): S3Client asynchronously uploads all 30 generated text files (15 Inputs / 15 Outputs) to AWS S3.
+10. Phase 6 (Sandbox Cleanup): The Worker securely destroys the `tmp/oarecall-job-*` Docker sandbox mounting directory. PostgreSQL problem status flips gracefully to `completed` (or gracefully fails to `failed` upon internal pipeline catches). Job completes.
 
 CODE EXECUTION FLOW (Validating User Code):
 1. User types in Monaco Editor and clicks Submit.

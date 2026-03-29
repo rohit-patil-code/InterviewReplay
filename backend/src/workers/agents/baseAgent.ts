@@ -22,7 +22,8 @@ export class BaseAgent {
     async generateWithReflection(
         prompt: string,
         maxRetries: number = 2,
-        isJsonFormat: boolean = true
+        isJsonFormat: boolean = true,
+        validationFn?: (parsed: any) => void
     ): Promise<string> {
         let attempt = 0;
         let p = prompt;
@@ -52,7 +53,10 @@ export class BaseAgent {
                     else if (text.startsWith('```')) text = text.replace(/^```\n?/, '').replace(/```\n?$/, '');
 
                     // Test parse to see if it throws
-                    JSON.parse(text);
+                    const parsed = JSON.parse(text);
+                    if (validationFn) {
+                        validationFn(parsed);
+                    }
                 }
 
                 return text;
