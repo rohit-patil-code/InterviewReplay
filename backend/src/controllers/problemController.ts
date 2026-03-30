@@ -5,16 +5,23 @@ import Redis from 'ioredis';
 import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 
 console.log('[System] Initializing global Redis connection for Producer...');
-const connection = new Redis({
-    host: '127.0.0.1',
-    port: 6379,
-    maxRetriesPerRequest: null,
-    enableOfflineQueue: false, // Prevents the "Pending" hang if Redis is unreachable
-    family: 4,                  // Forces IPv4
-    tls: {
-        rejectUnauthorized: false // Required to bypass certificate name mismatch through the tunnel
-    }
-});
+const connection = process.env.REDIS_URL
+    ? new Redis(process.env.REDIS_URL, {
+        maxRetriesPerRequest: null,
+        enableOfflineQueue: false, // Prevents the "Pending" hang if Redis is unreachable
+        family: 4,
+        tls: process.env.REDIS_URL.includes('amazonaws.com') ? { rejectUnauthorized: false } : undefined
+    })
+    : new Redis({
+        host: '127.0.0.1',
+        port: 6379,
+        maxRetriesPerRequest: null,
+        enableOfflineQueue: false, // Prevents the "Pending" hang if Redis is unreachable
+        family: 4,                  // Forces IPv4
+        tls: {
+            rejectUnauthorized: false // Required to bypass certificate name mismatch through the tunnel
+        }
+    });
 
 connection.on('error', (err) => {
     // Catch redis errors gracefully to not crash the whole node process

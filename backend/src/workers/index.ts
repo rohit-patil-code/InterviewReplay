@@ -14,15 +14,21 @@ const { Pool } = pg;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 console.log('[System] Initializing Worker Redis connection...');
-const connection = new Redis({
-    host: '127.0.0.1',
-    port: 6379,
-    maxRetriesPerRequest: null,
-    family: 4,                  // Forces IPv4 for the tunnel
-    tls: {
-        rejectUnauthorized: false // Required for tunneling to AWS
-    }
-});
+const connection = process.env.REDIS_URL 
+    ? new Redis(process.env.REDIS_URL, {
+        maxRetriesPerRequest: null,
+        family: 4,
+        tls: process.env.REDIS_URL.includes('amazonaws.com') ? { rejectUnauthorized: false } : undefined
+    })
+    : new Redis({
+        host: '127.0.0.1',
+        port: 6379,
+        maxRetriesPerRequest: null,
+        family: 4,                  // Forces IPv4 for the tunnel
+        tls: {
+            rejectUnauthorized: false // Required for tunneling to AWS
+        }
+    });
 connection.on('error', err => console.error('[Worker Redis Error]', err.message));
 
 console.log('[Worker] Initialization finished with Multi-Agent Workflow framework. Standing by for jobs...\n');
