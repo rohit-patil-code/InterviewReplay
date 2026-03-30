@@ -17,7 +17,8 @@ const sendTokenResponse = (res: Response, result: any, statusCode: number = 200)
         expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict' as 'strict'
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' as 'none' : 'strict' as 'strict',
+        domain: process.env.NODE_ENV === 'production' ? '.rohitcodes.tech' : undefined
     };
 
     if (token) {
@@ -128,7 +129,8 @@ export const logout = async (req: Request, res: Response, next: NextFunction): P
         res.clearCookie('token', {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' as 'none' : 'strict' as 'strict',
+            domain: process.env.NODE_ENV === 'production' ? '.rohitcodes.tech' : undefined
         });
 
         res.status(200).json({ success: true, message: 'Logged out successfully' });
