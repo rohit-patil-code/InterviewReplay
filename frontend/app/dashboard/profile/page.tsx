@@ -27,7 +27,7 @@ export default function ProfilePage() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const res = await fetch("http://localhost:3001/api/submissions", {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"}/submissions`, {
                     credentials: "include",
                 });
                 if (!res.ok) throw new Error("Failed to fetch submissions");

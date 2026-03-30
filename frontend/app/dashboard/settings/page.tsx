@@ -86,7 +86,7 @@ export default function SettingsPage() {
     useEffect(() => {
         const fetchProfile = async () => {
             try {
-                const res = await fetch("http://localhost:3001/api/profile", { credentials: "include" });
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"}/profile`, { credentials: "include" });
                 if (!res.ok) throw new Error();
                 const data: ProfileData = await res.json();
                 setProfile(data);
@@ -134,7 +134,7 @@ export default function SettingsPage() {
                 // Upload avatar if a new one was selected (base64 stored as data URL)
                 const finalAvatarUrl = avatarPreview ?? avatarUrl;
 
-                const res = await fetch("http://localhost:3001/api/profile", {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"}/profile`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     credentials: "include",
@@ -178,7 +178,7 @@ export default function SettingsPage() {
         if (deleteConfirmText !== "DELETE") return;
         setDeleteStatus("loading");
         try {
-            const res = await fetch("http://localhost:3001/api/profile", {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"}/profile`, {
                 method: "DELETE",
                 credentials: "include",
             });

@@ -61,7 +61,7 @@ function ConfigurationPanel({
     setIsGenerating(true);
 
     try {
-      const result = await fetch("http://localhost:3001/api/generate", {
+      const result = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"}/generate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

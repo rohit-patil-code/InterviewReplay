@@ -37,7 +37,7 @@ export function SettingsTabs() {
     useEffect(() => {
         const fetchProfile = async () => {
             try {
-                const res = await fetch("http://localhost:3001/api/profile", {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"}/profile`, {
                     credentials: "include",
                 });
                 if (!res.ok) throw new Error("Failed to fetch profile");
@@ -65,7 +65,7 @@ export function SettingsTabs() {
             setStatus("idle");
             setMessage("");
             try {
-                const res = await fetch("http://localhost:3001/api/profile", {
+                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api"}/profile`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     credentials: "include",
