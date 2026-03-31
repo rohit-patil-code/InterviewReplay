@@ -342,7 +342,7 @@ public class OARecall {
         return {
             fullScript,
             scriptName: "OARecall.java",
-            dockerCmd: `docker run --rm -i --net none --memory 512m --cpus 1 -v ${volumeMap} -w /usr/src/app eclipse-temurin:21-jdk sh -c "javac OARecall.java && java OARecall"`,
+            dockerCmd: `docker run --rm -i --net none --memory 384m --cpus 1 -v ${volumeMap} -w /usr/src/app eclipse-temurin:21-jdk sh -c "javac OARecall.java && java OARecall"`,
             setupPromises
         };
     }

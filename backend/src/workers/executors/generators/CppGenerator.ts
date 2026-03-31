@@ -327,7 +327,7 @@ int main() {
         return {
             fullScript,
             scriptName: "runner.cpp",
-            dockerCmd: `docker run --rm -i --net none --memory 512m --cpus 1 -v ${volumeMap} -w /usr/src/app gcc:latest sh -c "g++ runner.cpp -O2 -o runner && ./runner"`,
+            dockerCmd: `docker run --rm -i --net none --memory 256m --cpus 1 -v ${volumeMap} -w /usr/src/app gcc:latest sh -c "g++ runner.cpp -O2 -o runner && ./runner"`,
             setupPromises
         };
     }

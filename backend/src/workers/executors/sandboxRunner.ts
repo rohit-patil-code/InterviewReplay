@@ -24,7 +24,7 @@ export class SandboxRunner {
             // Map the host temp directory accurately into Docker safely isolated natively
             const volumeMap = `"${tmpDir}:/usr/src/app"`;
             // Execute the mapped script explicitly bounded safely
-            const runCmd = `docker run --rm --net none --memory 1024m --cpus 1 -v ${volumeMap} -w /usr/src/app node:20-slim sh -c "timeout -s KILL ${Math.ceil(timeoutMs / 1000)} node script.js"`;
+            const runCmd = `docker run --rm --net none --memory 512m --cpus 1 -v ${volumeMap} -w /usr/src/app node:20-slim sh -c "timeout -s KILL ${Math.ceil(timeoutMs / 1000)} node script.js"`;
 
             const { stdout, stderr } = await execPromise(runCmd, {
                 timeout: timeoutMs,

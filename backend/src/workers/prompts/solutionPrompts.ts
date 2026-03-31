@@ -31,6 +31,11 @@ ${sampleInput}
 """
 You MUST parse this string correctly using JSON.parse() before passing the arguments to your algorithm.
 
+CRITICAL DEFENSIVE PROGRAMMING:
+Your scripts MUST be extremely robust. Before writing any result to a file using \`fs.writeFileSync\`, you MUST check if the result is \`undefined\` or \`null\`.
+If it is, you MUST set it to the string \`"null"\` or a valid JSON representation (e.g., \`[]\`). 
+NEVER pass an undefined variable directly to \`fs.writeFileSync\` as this will crash the execution with a TypeError.
+
 CRITICAL SCRIPT FORMATTING:
 1. The script MUST be formatted with proper newlines (\\n) and indentation. DO NOT output the script as a single giant line.
 2. DO NOT include any markdown formatting, backticks, or explanatory text like "Here is your script" or "Node.js" inside the string. It must be ONLY actual valid JavaScript code.
