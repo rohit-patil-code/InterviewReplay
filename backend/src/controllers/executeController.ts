@@ -207,7 +207,7 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
         }));
 
         const batchInputs = preppedCases.map(p => p.sanitizedInputStr);
-        const batchTimeoutMs = mode === 'submit' ? 10000 : 3000;
+        const batchTimeoutMs = mode === 'submit' ? 10000 : 8000;
         const batchResults = await SandboxRunner.executeUserCode(code, language, userClassName, userFuncName, schema, batchInputs, batchTimeoutMs);
 
         const results = [];
