@@ -33,7 +33,7 @@ async function fetchS3File(s3Url: string): Promise<string> {
 function sanitizeInputToJson(inputStr: string, schema: any): string {
     if (!inputStr) return "{}";
 
-    let order = schema.order;
+    let order = schema?.order;
     if (!order) {
         const propKeys = Object.keys(schema?.properties || {});
         if (propKeys.length > 0) {
@@ -47,67 +47,67 @@ function sanitizeInputToJson(inputStr: string, schema: any): string {
     }
     let isSingleArg = order.length === 1 && order[0] === 'single_arg';
 
+    // Fast path: already valid JSON
     try {
         const parsed = JSON.parse(inputStr);
         if (typeof parsed === 'object' && parsed !== null) {
-            if (isSingleArg) {
-                return JSON.stringify([parsed]);
-            }
+            if (isSingleArg) return JSON.stringify([parsed]);
             return inputStr;
         }
     } catch (e: any) { }
 
-    if (isSingleArg && inputStr.includes('=')) {
-        const dynamicKeys = [];
-        const regex = /([a-zA-Z0-9_]+)\s*=/g;
-        let match;
-        while ((match = regex.exec(inputStr)) !== null) {
-            dynamicKeys.push(match[1]);
+    // Bracket-aware key=value parser — correctly handles nested arrays/objects.
+    // e.g. "n = 5, edges = [[0,1],[0,2],[0,3],[1,4]]"  won't break on inner commas.
+    function parseKV(str: string): Record<string, string> | null {
+        const result: Record<string, string> = {};
+        str = str.trim().replace(/^Input:\s*/i, '');
+        let i = 0;
+        while (i < str.length) {
+            while (i < str.length && (str[i] === ',' || str[i] === ' ' || str[i] === '\n')) i++;
+            if (i >= str.length) break;
+            const keyMatch = str.slice(i).match(/^([a-zA-Z0-9_]+)\s*=/);
+            if (!keyMatch) return null;
+            const key = keyMatch[1];
+            i += keyMatch[0].length;
+            while (i < str.length && str[i] === ' ') i++;
+            const start = i;
+            let depth = 0;
+            while (i < str.length) {
+                const c = str[i];
+                if (c === '[' || c === '(' || c === '{') depth++;
+                else if (c === ']' || c === ')' || c === '}') depth--;
+                else if (c === ',' && depth === 0) break;
+                i++;
+            }
+            result[key] = str.slice(start, i).trim();
         }
-        if (dynamicKeys.length > 1) {
-            order = dynamicKeys;
-            isSingleArg = false;
-        }
+        return Object.keys(result).length > 0 ? result : null;
     }
 
-    if (order.length > 0) {
-        let argsArr: any[] = [];
-        let matchedSomething = false;
-
+    const kvPairs = parseKV(inputStr);
+    if (kvPairs) {
+        const foundKeys = Object.keys(kvPairs);
+        if (isSingleArg && foundKeys.length > 1) { order = foundKeys; isSingleArg = false; }
+        const argsArr: any[] = [];
+        let ok = true;
         for (const key of order) {
-            const regex = new RegExp(`${key}\\s*=\\s*(.+?)(?:,\\s*[a-zA-Z0-9_]+\\s*=|$|\\n)`, 'i');
-            const match = inputStr.match(regex);
-            if (match && match[1]) {
-                matchedSomething = true;
-                let valStr = match[1].trim();
-                try {
-                    argsArr.push(JSON.parse(valStr));
-                } catch (e: any) {
-                    argsArr.push(valStr);
-                }
-            }
+            const k = key === 'single_arg' ? foundKeys[0] : key;
+            const valStr = kvPairs[k];
+            if (valStr === undefined) { ok = false; break; }
+            try { argsArr.push(JSON.parse(valStr)); } catch (e: any) { argsArr.push(valStr); }
         }
-
-        if (matchedSomething) {
-            return JSON.stringify(argsArr);
-        }
-
-        if (order.length === 1) {
-            let cleanStr = inputStr.trim().replace(/^Input:\s*/i, '');
-            const assignmentMatch = cleanStr.match(/^[a-zA-Z0-9_]+\s*=\s*([\s\S]*)$/);
-            if (assignmentMatch) {
-                cleanStr = assignmentMatch[1].trim();
-            }
-
-            try {
-                let p = JSON.parse(cleanStr);
-                return JSON.stringify([p]);
-            } catch (e: any) {
-                cleanStr = cleanStr.replace(/^["'](.*)["']$/, '$1');
-                return JSON.stringify([cleanStr]);
-            }
-        }
+        if (ok && argsArr.length > 0) return JSON.stringify(argsArr);
     }
+
+    // Fallback for single-arg: strip "key =" prefix and parse raw value
+    if (isSingleArg || order.length === 1) {
+        let cleanStr = inputStr.trim().replace(/^Input:\s*/i, '');
+        const m = cleanStr.match(/^[a-zA-Z0-9_]+\s*=\s*([\s\S]*)$/);
+        if (m) cleanStr = m[1].trim();
+        try { return JSON.stringify([JSON.parse(cleanStr)]); }
+        catch (e: any) { return JSON.stringify([cleanStr.replace(/^["'](.*)['"']$/, '$1')]); }
+    }
+
     return JSON.stringify([inputStr]);
 }
 

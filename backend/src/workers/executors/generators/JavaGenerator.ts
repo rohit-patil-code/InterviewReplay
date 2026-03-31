@@ -310,6 +310,7 @@ public class OARecall {
     }
 }
 
+// --- Data Structures for Tree/List Problems ---
 class TreeNode {
     public int val;
     public TreeNode left;
@@ -331,6 +332,7 @@ class ListNode {
     public ListNode(int val, ListNode next) { this.val = val; this.next = next; }
 }
 
+// --- User Solution ---
 ${cleanUserCode}
 `;
 
