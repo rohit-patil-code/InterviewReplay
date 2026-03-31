@@ -54,18 +54,50 @@ export class JavaGenerator implements CodeGenerator {
         }
         const setupPromises: Promise<void>[] = [];
 
+        // Converts a tree object {val/value, left, right} to LeetCode BFS array [3,9,20,null,null,15,7]
+        const treeObjectToBFSArray = (root: any): (number | null)[] => {
+            if (!root) return [];
+            const result: (number | null)[] = [];
+            const queue: any[] = [root];
+            while (queue.length > 0) {
+                const node = queue.shift();
+                if (node === null || node === undefined) {
+                    result.push(null);
+                } else {
+                    result.push(node.val !== undefined ? node.val : node.value);
+                    queue.push(node.left ?? null);
+                    queue.push(node.right ?? null);
+                }
+            }
+            while (result.length > 0 && result[result.length - 1] === null) result.pop();
+            return result;
+        };
+
+        const isTreeObject = (v: any): boolean =>
+            v !== null && typeof v === 'object' && !Array.isArray(v) &&
+            ('val' in v || 'value' in v) && ('left' in v || 'right' in v);
+
         const stringifyForJava = (val: any): string => {
             if (typeof val === 'string') return val;
             if (typeof val === 'number') return String(val);
             if (typeof val === 'boolean') return String(val);
+            // Defensive: AI sometimes generates {value, left, right} instead of flat BFS array
+            if (isTreeObject(val)) {
+                return treeObjectToBFSArray(val).map((v: any) => v === null ? 'null' : v).join(',');
+            }
             if (Array.isArray(val)) {
                 if (val.length === 0) return "";
+                // Check if it's an array of tree objects (rare but possible)
+                if (val.length > 0 && isTreeObject(val[0])) {
+                    return val.map((v: any) => isTreeObject(v) ? treeObjectToBFSArray(v).map((n: any) => n === null ? 'null' : n).join(',') : (v === null ? "null" : v)).join('\n');
+                }
                 if (Array.isArray(val[0])) return val.map(row => row.map((v: any) => v === null ? "null" : v).join(',')).join('\n');
                 if (typeof val[0] === 'string') return val.map((v: any) => v === null ? "null" : v).join('\n--END_OF_STRING--\n');
                 return val.map((v: any) => v === null ? "null" : v).join(',');
             }
             return "";
         };
+
 
         const JavaReaderGenerators: string[] = [];
 
