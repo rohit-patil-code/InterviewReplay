@@ -87,16 +87,22 @@ function sanitizeInputToJson(inputStr: string, schema: any): string {
     const kvPairs = parseKV(inputStr);
     if (kvPairs) {
         const foundKeys = Object.keys(kvPairs);
-        if (isSingleArg && foundKeys.length > 1) { order = foundKeys; isSingleArg = false; }
-        const argsArr: any[] = [];
-        let ok = true;
-        for (const key of order) {
-            const k = key === 'single_arg' ? foundKeys[0] : key;
-            const valStr = kvPairs[k];
-            if (valStr === undefined) { ok = false; break; }
-            try { argsArr.push(JSON.parse(valStr)); } catch (e: any) { argsArr.push(valStr); }
+
+        // Prefer schema order if ALL its keys are present in the input; otherwise use input key order.
+        // This handles the case where schema has different param names than the example input string.
+        const schemaMatches = !isSingleArg && order.length > 0 && order.every((k: string) => k === 'single_arg' || kvPairs[k] !== undefined);
+        const resolvedOrder = schemaMatches ? order : foundKeys;
+
+        if (resolvedOrder.length > 0) {
+            const argsArr: any[] = [];
+            for (const key of resolvedOrder) {
+                const k = key === 'single_arg' ? foundKeys[0] : key;
+                const valStr = kvPairs[k];
+                if (valStr === undefined) continue;
+                try { argsArr.push(JSON.parse(valStr)); } catch (e: any) { argsArr.push(valStr); }
+            }
+            if (argsArr.length > 0) return JSON.stringify(argsArr);
         }
-        if (ok && argsArr.length > 0) return JSON.stringify(argsArr);
     }
 
     // Fallback for single-arg: strip "key =" prefix and parse raw value
@@ -105,7 +111,7 @@ function sanitizeInputToJson(inputStr: string, schema: any): string {
         const m = cleanStr.match(/^[a-zA-Z0-9_]+\s*=\s*([\s\S]*)$/);
         if (m) cleanStr = m[1].trim();
         try { return JSON.stringify([JSON.parse(cleanStr)]); }
-        catch (e: any) { return JSON.stringify([cleanStr.replace(/^["'](.*)['"']$/, '$1')]); }
+        catch (e: any) { return JSON.stringify([cleanStr.replace(/^["'](.*)['"]$/, '$1')]); }
     }
 
     return JSON.stringify([inputStr]);
