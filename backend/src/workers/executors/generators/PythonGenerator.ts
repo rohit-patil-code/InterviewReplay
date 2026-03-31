@@ -86,6 +86,9 @@ export class PythonGenerator implements CodeGenerator {
             });
         });
 
+        // JSON.stringify produces lowercase true/false — Python needs True/False
+        const argIsLikelyTreePy = '[' + argIsLikelyTree.map((v: boolean) => v ? 'True' : 'False').join(', ') + ']';
+
         const driverCode = `
 
 import json
@@ -180,7 +183,7 @@ if __name__ == '__main__':
         param_annotations = ${JSON.stringify(paramAnnotations)}
         # Pre-computed tree flags: True if ANY test case for this arg had null values.
         # This ensures empty-tree inputs [] still get build_tree() called.
-        arg_is_tree = ${JSON.stringify(argIsLikelyTree)}
+        arg_is_tree = ${argIsLikelyTreePy}
 
         for tc_idx, parsed_input in enumerate(all_inputs):
             try:
