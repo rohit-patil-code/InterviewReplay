@@ -332,12 +332,12 @@ class ListNode {
 }
 
 ${cleanUserCode}
-\`;
+`;
 
         return {
             fullScript,
             scriptName: "OARecall.java",
-            dockerCmd: \`docker run --rm -i --net none --memory 384m --cpus 1 -v \${volumeMap} -w /usr/src/app eclipse-temurin:21-jdk sh -c "java OARecall.java"\`,
+            dockerCmd: `docker run --rm -i --net none --memory 384m --cpus 1 -v ${volumeMap} -w /usr/src/app eclipse-temurin:21-jdk sh -c "java OARecall.java"`,
             setupPromises
         };
     }
