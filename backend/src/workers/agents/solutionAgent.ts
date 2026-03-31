@@ -13,12 +13,12 @@ export interface SolutionAgentResult {
 
 export class SolutionAgent extends GeminiAgent {
     constructor() {
-        super("gemini-1.5-flash", "You are an expert algorithms engineer who writes highly robust optimal and brute-force solution scripts.");
+        super("gemini-2.5-flash", "You are an expert algorithms engineer who writes highly robust optimal and brute-force solution scripts.");
     }
 
     async generateAndVerifySolution(description: string, generationSchema: string, workingDirectory: string, sampleInputPayload: string): Promise<SolutionAgentResult> {
         const initialPrompt = generateSolutionPrompt(description, generationSchema, sampleInputPayload);
-        
+
         const validationFn = (parsed: any) => {
             if (!parsed.starter_code) throw new Error("JSON missing required 'starter_code' key.");
             if (!parsed.bruteforce_script || typeof parsed.bruteforce_script !== 'string') throw new Error("JSON missing required 'bruteforce_script' string.");
@@ -36,9 +36,9 @@ export class SolutionAgent extends GeminiAgent {
         while (attempt < MAX_REPAIRS) {
             try {
                 // CLEANUP previous outputs
-                for(let i=1; i<=15; i++) {
-                    await fs.rm(path.join(workingDirectory, `output_${i}.txt`), {force: true}).catch(()=>{});
-                    await fs.rm(path.join(workingDirectory, `bf_output_${i}.txt`), {force: true}).catch(()=>{});
+                for (let i = 1; i <= 15; i++) {
+                    await fs.rm(path.join(workingDirectory, `output_${i}.txt`), { force: true }).catch(() => { });
+                    await fs.rm(path.join(workingDirectory, `bf_output_${i}.txt`), { force: true }).catch(() => { });
                 }
 
                 console.log(`[SolutionAgent] Executing Bruteforce script attempt ${attempt + 1}...`);
@@ -53,7 +53,7 @@ export class SolutionAgent extends GeminiAgent {
                 for (let i = 1; i <= 5; i++) {
                     const bfPath = path.join(workingDirectory, `bf_output_${i}.txt`);
                     const optPath = path.join(workingDirectory, `output_${i}.txt`);
-                    
+
                     const bfOut = await fs.readFile(bfPath, 'utf8').catch(() => null);
                     const optOut = await fs.readFile(optPath, 'utf8').catch(() => null);
 

@@ -5,15 +5,14 @@ export class GeminiAgent {
     protected model: any;
     protected systemInstruction?: string;
 
-    constructor(modelName: string = "gemini-1.5-flash", systemInstruction?: string) {
+    constructor(modelName: string = "gemini-2.5-flash", systemInstruction?: string) {
         if (!process.env.GEMINI_API_KEY) {
             throw new Error("GEMINI_API_KEY is not defined in environment variables");
         }
 
         this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        this.model = this.genAI.getGenerativeModel({ 
-            model: modelName,
-            systemInstruction: systemInstruction 
+        this.model = this.genAI.getGenerativeModel({
+            model: modelName
         });
         this.systemInstruction = systemInstruction;
     }
@@ -32,11 +31,13 @@ export class GeminiAgent {
 
         while (attempt <= maxRetries) {
             try {
-                // Gemini handle system instructions in the model configuration above, 
-                // but we can also prepend it to the prompt for extra strength if needed.
-                
+                // Prepend system instructions to the prompt (matching aiService.ts)
+                const fullPrompt = this.systemInstruction
+                    ? `SYSTEM INSTRUCTION:\n${this.systemInstruction}\n\nUSER PROMPT:\n${p}`
+                    : p;
+
                 const result = await this.model.generateContent({
-                    contents: [{ role: "user", parts: [{ text: p }] }],
+                    contents: [{ role: "user", parts: [{ text: fullPrompt }] }],
                     generationConfig: {
                         responseMimeType: isJsonFormat ? "application/json" : "text/plain",
                     }
