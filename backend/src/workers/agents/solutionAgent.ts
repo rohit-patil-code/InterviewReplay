@@ -1,4 +1,4 @@
-import { BaseAgent } from "./baseAgent";
+import { GeminiAgent } from "./geminiAgent";
 import { SandboxRunner } from "../executors/sandboxRunner";
 import { generateSolutionPrompt } from "../prompts/solutionPrompts";
 import * as fs from 'fs/promises';
@@ -11,9 +11,9 @@ export interface SolutionAgentResult {
     computedResults: string;
 }
 
-export class SolutionAgent extends BaseAgent {
+export class SolutionAgent extends GeminiAgent {
     constructor() {
-        super(undefined, "You are an expert algorithms engineer who writes highly robust optimal and brute-force solution scripts.");
+        super("gemini-1.5-flash", "You are an expert algorithms engineer who writes highly robust optimal and brute-force solution scripts.");
     }
 
     async generateAndVerifySolution(description: string, generationSchema: string, workingDirectory: string, sampleInputPayload: string): Promise<SolutionAgentResult> {
@@ -42,11 +42,11 @@ export class SolutionAgent extends BaseAgent {
                 }
 
                 console.log(`[SolutionAgent] Executing Bruteforce script attempt ${attempt + 1}...`);
-                const bfResult = await SandboxRunner.executeNodeScript(currentBruteforceScript, 3000, workingDirectory);
+                const bfResult = await SandboxRunner.executeNodeScript(currentBruteforceScript, 4000, workingDirectory);
                 if (bfResult.stderr) console.warn(`[SolutionAgent] Bruteforce STDERR: ${bfResult.stderr}`);
 
                 console.log(`[SolutionAgent] Executing Optimal script attempt ${attempt + 1}...`);
-                const optResult = await SandboxRunner.executeNodeScript(currentOptimalScript, 3000, workingDirectory);
+                const optResult = await SandboxRunner.executeNodeScript(currentOptimalScript, 4000, workingDirectory);
                 if (optResult.stderr) console.warn(`[SolutionAgent] Optimal STDERR: ${optResult.stderr}`);
 
                 // VERIFICATION: Dual-Solver Match Check on Inputs 1-5
@@ -57,11 +57,11 @@ export class SolutionAgent extends BaseAgent {
                     const bfOut = await fs.readFile(bfPath, 'utf8').catch(() => null);
                     const optOut = await fs.readFile(optPath, 'utf8').catch(() => null);
 
-                    if (bfOut === null) throw new Error(`Bruteforce failed to write bf_output_${i}.txt.`);
-                    if (optOut === null) throw new Error(`Optimal failed to write output_${i}.txt.`);
+                    if (bfOut === null) throw new Error(`Bruteforce failed to write bf_output_${i}.txt. Stderr: ${bfResult.stderr}`);
+                    if (optOut === null) throw new Error(`Optimal failed to write output_${i}.txt. Stderr: ${optResult.stderr}`);
 
                     if (bfOut.trim() !== optOut.trim()) {
-                        throw new Error(`Dual-Solver Mismatch on Input ${i}!\nBrute-force output:\n${bfOut.substring(0, 500)}\nOptimal output:\n${optOut.substring(0, 500)}\nThe logic in the optimal script is likely flawed.`);
+                        throw new Error(`Dual-Solver Mismatch on Input ${i}!\nBrute-force output:\n${bfOut.substring(0, 500)}\nOptimal output:\n${optOut.substring(0, 500)}\nCRITICAL: One of these is wrong. Rethink the logic.`);
                     }
                 }
 
@@ -88,18 +88,19 @@ export class SolutionAgent extends BaseAgent {
                 }
 
                 console.log(`[SolutionAgent] Requesting LLM to repair the crashed or mismatched logic...`);
-                // Reflect back with a valid JSON request that requires all three keys.
+                // Reflect back with more descriptive mismatch evidence
                 const repairPrompt = `
 ${initialPrompt}
 
 =================================
-PREVIOUS Node.js SCRIPTS FAILED EXECUTION OR MISMATCHED:
-ERROR TRACE:
+PREVIOUS ATTEMPT FAILED. 
+DETAILED ERROR AND EXECUTION EVIDENCE:
 ${executionError.message}
 
-Please critically analyze the error and return ONLY a strict JSON object with 'starter_code', 'bruteforce_script', and 'optimal_script' containing the fixed versions.
-Return ONLY the strict JSON object as requested with all 3 keys: 'starter_code', 'bruteforce_script', and 'optimal_script'.
-CRITICAL: Both scripts MUST be raw, valid Node.js (JavaScript) scripts. DO NOT write Python or any other language. DO NOT wrap with markdown blocks.
+Please critically analyze why the Brute-force and Optimal scripts disagreed or crashed. 
+Provide a fixed strict JSON object with 'starter_code', 'bruteforce_script', and 'optimal_script'.
+Ensure that BOTH scripts produce identical, correct results for all inputs.
+Return ONLY a valid JSON object.
 `;
 
                 currentResponse = await this.generateWithReflection(repairPrompt, 2, true, validationFn);
