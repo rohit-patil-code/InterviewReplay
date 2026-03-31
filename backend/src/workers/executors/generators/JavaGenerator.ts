@@ -2,6 +2,23 @@ import { CodeGenerator, ExecutionContext, GeneratorResult } from "./CodeGenerato
 import fs from 'fs/promises';
 import path from 'path';
 
+/**
+ * Extracts the Java type of each parameter in the given function signature.
+ * e.g. for 'public int maxDepth(TreeNode root)' with funcName='maxDepth'
+ * returns ['TreeNode']
+ * e.g. for 'public boolean isValidTree(int n, int[][] edges)'
+ * returns ['int', 'int[][]']
+ */
+function extractJavaParamTypes(code: string, funcName: string): string[] {
+    // Strip comment blocks before parsing to avoid matching types in commented-out definitions
+    const stripped = code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    const match = stripped.match(
+        new RegExp(`(?:public|private|protected)?\\s*(?:static\\s+)?[\\w<>\\[\\]]+\\s+${funcName}\\s*\\(([^)]*)\\)`)
+    );
+    if (!match || !match[1].trim()) return [];
+    return match[1].trim().split(',').map(p => p.trim().split(/\s+/)[0]);
+}
+
 export class JavaGenerator implements CodeGenerator {
     generate(context: ExecutionContext): GeneratorResult {
         const { userCode, className, functionName, schema, testCaseInputs, tmpDir, volumeMap } = context;
@@ -72,60 +89,108 @@ export class JavaGenerator implements CodeGenerator {
             });
         });
 
+        // PRIMARY: Extract param types directly from the user's function signature.
+        // This is the most reliable source — a TreeNode parameter means buildTree,
+        // an int[][] parameter means read2DIntArray, etc., regardless of schema.
+        const paramTypes = extractJavaParamTypes(userCode, functionName);
+
         schemaKeys.forEach((k: string, argIdx: number) => {
+            const R = (expr: string) => `${expr}`; // shorthand
+            const argFile = `"arg_" + i + "_${argIdx}.txt"`;
+            const readStr = `new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(${argFile})), java.nio.charset.StandardCharsets.UTF_8)`;
+
+            // --- Priority 1: Use extracted Java type from function signature ---
+            const javaType = (paramTypes[argIdx] || '').toLowerCase().replace(/\s/g, '');
+            if (javaType === 'treenode') {
+                JavaReaderGenerators.push(`buildTree(${readStr}.trim())`);
+                return;
+            }
+            if (javaType === 'listnode') {
+                JavaReaderGenerators.push(`buildList(${readStr}.trim())`);
+                return;
+            }
+            if (javaType === 'int[][]' || javaType === 'long[][]' || javaType === 'char[][]') {
+                JavaReaderGenerators.push(`read2DIntArray(${argFile})`);
+                return;
+            }
+            if (javaType === 'string[]') {
+                JavaReaderGenerators.push(`readStringArray(${argFile})`);
+                return;
+            }
+            if (javaType === 'int[]' || javaType === 'long[]' || javaType === 'short[]' || javaType === 'double[]') {
+                JavaReaderGenerators.push(`read1DIntArray(${argFile})`);
+                return;
+            }
+            if (javaType === 'char[]') {
+                JavaReaderGenerators.push(`${readStr}.trim().toCharArray()`);
+                return;
+            }
+            if (javaType === 'int' || javaType === 'short' || javaType === 'byte') {
+                JavaReaderGenerators.push(`Integer.parseInt(${readStr}.trim())`);
+                return;
+            }
+            if (javaType === 'long') {
+                JavaReaderGenerators.push(`Long.parseLong(${readStr}.trim())`);
+                return;
+            }
+            if (javaType === 'double' || javaType === 'float') {
+                JavaReaderGenerators.push(`Double.parseDouble(${readStr}.trim())`);
+                return;
+            }
+            if (javaType === 'boolean') {
+                JavaReaderGenerators.push(`Boolean.parseBoolean(${readStr}.trim())`);
+                return;
+            }
+            if (javaType === 'char') {
+                JavaReaderGenerators.push(`${readStr}.trim().charAt(0)`);
+                return;
+            }
+            if (javaType === 'string') {
+                JavaReaderGenerators.push(`${readStr}.trim()`);
+                return;
+            }
+
+            // --- Priority 2: Schema type (if param type extraction failed) ---
+            let schemaType = schema?.properties?.[k]?.type;
+            if (!schemaType && Array.isArray(schema?.order)) {
+                const orderItem = schema.order[argIdx];
+                if (orderItem && typeof orderItem === 'object') schemaType = orderItem.type || orderItem.dataType;
+            }
+            if (!schemaType) {
+                schemaType = schema?.type;
+                if (!schemaType && schema && typeof schema === 'object') schemaType = schema[k];
+            }
+            const normalizedType = String(schemaType).toLowerCase();
+            if (normalizedType === 'treenode' || normalizedType === 'tree') {
+                JavaReaderGenerators.push(`buildTree(${readStr}.trim())`);
+                return;
+            }
+            if (normalizedType === 'listnode' || normalizedType === 'linked_list' || normalizedType === 'list') {
+                JavaReaderGenerators.push(`buildList(${readStr}.trim())`);
+                return;
+            }
+
+            // --- Priority 3: Infer from the actual value ---
             let val = null;
             if (Array.isArray(firstParsed) && firstParsed.length > 0) {
-                if (firstParsed.length === 1 && typeof firstParsed[0] === 'object' && !Array.isArray(firstParsed[0]) && firstParsed[0][k] !== undefined) {
-                    val = firstParsed[0][k];
-                } else {
-                    val = firstParsed[argIdx];
-                }
+                val = firstParsed.length === 1 && typeof firstParsed[0] === 'object' && !Array.isArray(firstParsed[0]) && firstParsed[0][k] !== undefined
+                    ? firstParsed[0][k] : firstParsed[argIdx];
             } else if (typeof firstParsed === 'object' && firstParsed !== null) {
                 val = firstParsed[k];
             } else {
                 val = firstParsed;
             }
-
-            // --- FIX: ROBUST SCHEMA TYPE EXTRACTION ---
-            let schemaType = schema?.properties?.[k]?.type;
-
-            // If not in properties, check if it's explicitly defined in the 'order' array by index
-            if (!schemaType && Array.isArray(schema?.order)) {
-                const orderItem = schema.order[argIdx];
-                if (orderItem && typeof orderItem === 'object') {
-                    schemaType = orderItem.type || orderItem.dataType; // Handle variations
-                }
+            if (typeof val === 'string')  { JavaReaderGenerators.push(`${readStr}`); return; }
+            if (typeof val === 'number')  { JavaReaderGenerators.push(`Integer.parseInt(${readStr}.trim())`); return; }
+            if (typeof val === 'boolean') { JavaReaderGenerators.push(`Boolean.parseBoolean(${readStr}.trim())`); return; }
+            if (Array.isArray(val)) {
+                if (val.length === 0) { JavaReaderGenerators.push(`new int[]{}`); return; }
+                if (Array.isArray(val[0])) { JavaReaderGenerators.push(`read2DIntArray(${argFile})`); return; }
+                if (typeof val[0] === 'string') { JavaReaderGenerators.push(`readStringArray(${argFile})`); return; }
+                JavaReaderGenerators.push(`read1DIntArray(${argFile})`);
+                return;
             }
-
-            // Fallback to root type
-            if (!schemaType) {
-                schemaType = schema?.type;
-                if (!schemaType && schema && typeof schema === 'object') {
-                    schemaType = schema[k];
-                }
-            }
-
-            const normalizedType = String(schemaType).toLowerCase();
-            // -------------------------------------------
-
-            if (normalizedType === 'treenode' || normalizedType === 'tree') {
-                JavaReaderGenerators.push(`buildTree(new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("arg_" + i + "_${argIdx}.txt")), java.nio.charset.StandardCharsets.UTF_8).trim())`);
-            } else if (normalizedType === 'listnode' || normalizedType === 'linked_list' || normalizedType === 'list') {
-                JavaReaderGenerators.push(`buildList(new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("arg_" + i + "_${argIdx}.txt")), java.nio.charset.StandardCharsets.UTF_8).trim())`);
-            } else if (typeof val === 'string') {
-                JavaReaderGenerators.push(`new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("arg_" + i + "_${argIdx}.txt")), java.nio.charset.StandardCharsets.UTF_8)`);
-            } else if (typeof val === 'number') {
-                JavaReaderGenerators.push(`Integer.parseInt(new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("arg_" + i + "_${argIdx}.txt")), java.nio.charset.StandardCharsets.UTF_8).trim())`);
-            } else if (typeof val === 'boolean') {
-                JavaReaderGenerators.push(`Boolean.parseBoolean(new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("arg_" + i + "_${argIdx}.txt")), java.nio.charset.StandardCharsets.UTF_8).trim())`);
-            } else if (Array.isArray(val)) {
-                if (val.length === 0) JavaReaderGenerators.push(`new int[]{}`);
-                else if (Array.isArray(val[0])) JavaReaderGenerators.push(`read2DIntArray("arg_" + i + "_${argIdx}.txt")`);
-                else if (typeof val[0] === 'string') JavaReaderGenerators.push(`readStringArray("arg_" + i + "_${argIdx}.txt")`);
-                else JavaReaderGenerators.push(`read1DIntArray("arg_" + i + "_${argIdx}.txt")`);
-            } else {
-                JavaReaderGenerators.push('null');
-            }
+            JavaReaderGenerators.push('null');
         });
 
         const cleanUserCode = userCode.replace(/public\s+class\s+([a-zA-Z0-9_]+)/g, 'class $1');

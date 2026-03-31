@@ -150,8 +150,15 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
         let userClassName = "";
         let userFuncName = "";
 
+        // Strip block and line comments BEFORE scanning for class/function names.
+        // This prevents matching class names like 'TreeNode' from /** ... */ comment blocks.
+        const codeForParsing = code
+            .replace(/\/\*[\s\S]*?\*\//g, '')  // remove /* ... */ blocks
+            .replace(/\/\/[^\n]*/g, '')          // remove // line comments
+            .replace(/#[^\n]*/g, '');            // remove # line comments (Python)
+
         if (language === 'cpp') {
-            const match = code.match(/class\s+([a-zA-Z0-9_]+)[\s\S]*?(?:public\s*:\s*)?[\w<>,:\*&\s]+\s+([a-zA-Z0-9_]+)\s*\(/);
+            const match = codeForParsing.match(/class\s+([a-zA-Z0-9_]+)[\s\S]*?(?:public\s*:\s*)?[\w<>,:*&\s]+\s+([a-zA-Z0-9_]+)\s*\(/);
             if (!match) {
                 res.status(400).json({ error: "Invalid C++ definition" });
                 return;
@@ -159,7 +166,7 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
             userClassName = match[1];
             userFuncName = match[2];
         } else if (language === 'python') {
-            const match = code.match(/class\s+([a-zA-Z0-9_]+)[({:]?[\s\S]*?def\s+([a-zA-Z0-9_]+)\s*\(/);
+            const match = codeForParsing.match(/class\s+([a-zA-Z0-9_]+)[({:]?[\s\S]*?def\s+([a-zA-Z0-9_]+)\s*\(/);
             if (!match) {
                 res.status(400).json({ error: "Invalid Python definition" });
                 return;
@@ -167,13 +174,20 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
             userClassName = match[1];
             userFuncName = match[2];
         } else if (language === 'java') {
-            const match = code.match(/class\s+([a-zA-Z0-9_]+)\s*{[\s\S]*?(?:public|private|protected)?\s*(?:static\s+)?[\w<>[\]]+\s+([a-zA-Z0-9_]+)\s*\(/);
-            if (!match) {
-                res.status(400).json({ error: "Invalid Java definition" });
-                return;
+            // Prefer matching 'class Solution' explicitly (almost all LeetCode Java uses this)
+            const solutionMatch = codeForParsing.match(/class\s+Solution\s*(?:implements[^{]*)?\s*\{[\s\S]*?(?:public|private|protected)?\s*(?:static\s+)?[\w<>[\]]+\s+([a-zA-Z0-9_]+)\s*\(/);
+            if (solutionMatch) {
+                userClassName = 'Solution';
+                userFuncName = solutionMatch[1];
+            } else {
+                const fallback = codeForParsing.match(/class\s+([a-zA-Z0-9_]+)\s*\{[\s\S]*?(?:public|private|protected)?\s*(?:static\s+)?[\w<>[\]]+\s+([a-zA-Z0-9_]+)\s*\(/);
+                if (!fallback) {
+                    res.status(400).json({ error: "Invalid Java definition" });
+                    return;
+                }
+                userClassName = fallback[1];
+                userFuncName = fallback[2];
             }
-            userClassName = match[1];
-            userFuncName = match[2];
         }
 
         let testCases: any[] = [];
