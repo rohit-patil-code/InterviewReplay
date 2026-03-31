@@ -133,29 +133,6 @@ export class JavaGenerator implements CodeGenerator {
         const fullScript = `
 import java.util.*;
 
-class TreeNode {
-    public int val;
-    public TreeNode left;
-    public TreeNode right;
-    public TreeNode() {}
-    public TreeNode(int val) { this.val = val; }
-    public TreeNode(int val, TreeNode left, TreeNode right) {
-        this.val = val;
-        this.left = left;
-        this.right = right;
-    }
-}
-
-class ListNode {
-    public int val;
-    public ListNode next;
-    public ListNode() {}
-    public ListNode(int val) { this.val = val; }
-    public ListNode(int val, ListNode next) { this.val = val; this.next = next; }
-}
-
-${cleanUserCode}
-
 public class OARecall {
     public static void main(String[] args) {
         System.out.println("\\n---EXEC_RESULT---");
@@ -255,10 +232,8 @@ public class OARecall {
         if (obj instanceof String) return "\\"" + ((String)obj).replace("\\"", "\\\\\\\"") + "\\"";
         if (obj instanceof Number || obj instanceof Boolean) return obj.toString();
         
-        // --- NEW: Serializers for Outputting nodes back to Sandbox! ---
         if (obj instanceof TreeNode) return treeNodeToJSON((TreeNode)obj);
         if (obj instanceof ListNode) return listNodeToJSON((ListNode)obj);
-        // --------------------------------------------------------------
         
         if (obj instanceof int[]) return Arrays.toString((int[])obj);
         if (obj instanceof double[]) return Arrays.toString((double[])obj);
@@ -286,7 +261,6 @@ public class OARecall {
         return "\\"" + obj.toString().replace("\\"", "\\\\\\\"") + "\\""; 
     }
     
-    // Convert TreeNode output back to LeetCode array string format
     public static String treeNodeToJSON(TreeNode root) {
         if (root == null) return "[]";
         List<Integer> res = new ArrayList<>();
@@ -302,7 +276,6 @@ public class OARecall {
                 res.add(null);
             }
         }
-        // Trim trailing nulls
         while(res.size() > 0 && res.get(res.size()-1) == null) {
             res.remove(res.size()-1);
         }
@@ -315,7 +288,6 @@ public class OARecall {
         return sb.toString();
     }
     
-    // Convert ListNode output back to array string format
     public static String listNodeToJSON(ListNode head) {
         if (head == null) return "[]";
         StringBuilder sb = new StringBuilder("[");
@@ -337,12 +309,35 @@ public class OARecall {
         return sb.toString();
     }
 }
-`;
+
+class TreeNode {
+    public int val;
+    public TreeNode left;
+    public TreeNode right;
+    public TreeNode() {}
+    public TreeNode(int val) { this.val = val; }
+    public TreeNode(int val, TreeNode left, TreeNode right) {
+        this.val = val;
+        this.left = left;
+        this.right = right;
+    }
+}
+
+class ListNode {
+    public int val;
+    public ListNode next;
+    public ListNode() {}
+    public ListNode(int val) { this.val = val; }
+    public ListNode(int val, ListNode next) { this.val = val; this.next = next; }
+}
+
+${cleanUserCode}
+\`;
 
         return {
             fullScript,
             scriptName: "OARecall.java",
-            dockerCmd: `docker run --rm -i --net none --memory 384m --cpus 1 -v ${volumeMap} -w /usr/src/app eclipse-temurin:21-jdk sh -c "java OARecall.java"`,
+            dockerCmd: \`docker run --rm -i --net none --memory 384m --cpus 1 -v \${volumeMap} -w /usr/src/app eclipse-temurin:21-jdk sh -c "java OARecall.java"\`,
             setupPromises
         };
     }
