@@ -66,6 +66,26 @@ export class PythonGenerator implements CodeGenerator {
         // PRIMARY: Extract param types from the user's Python function signature (type annotations)
         const paramAnnotations = extractPythonParamTypes(userCode, functionName);
 
+        // CROSS-TEST TREE DETECTION: Scan ALL test cases per arg index.
+        // If ANY test case for an arg contains null values it's a tree.
+        // This means empty-tree inputs like [] still get build_tree() called correctly.
+        const argIsLikelyTree: boolean[] = schemaKeys.map((k: string, argIdx: number) => {
+            // Already determined from annotation or schema
+            const ann = (paramAnnotations[argIdx] || '').toLowerCase();
+            const stype = (schemaTypes[k] || '').toLowerCase();
+            if (ann.includes('treenode') || stype.includes('treenode') || stype === 'tree') return true;
+            // Check all test cases for null values in this argument position
+            return testCaseInputs.some((inputStr: string) => {
+                try {
+                    const parsed = JSON.parse(inputStr || '{}');
+                    let val: any = null;
+                    if (Array.isArray(parsed) && argIdx < parsed.length) val = parsed[argIdx];
+                    else if (typeof parsed === 'object' && parsed !== null) val = parsed[k];
+                    return Array.isArray(val) && val.some((v: any) => v === null);
+                } catch { return false; }
+            });
+        });
+
         const driverCode = `
 
 import json
@@ -158,6 +178,9 @@ if __name__ == '__main__':
         schema_keys = ${JSON.stringify(schemaKeys)}
         schema_types = ${JSON.stringify(schemaTypes)}
         param_annotations = ${JSON.stringify(paramAnnotations)}
+        # Pre-computed tree flags: True if ANY test case for this arg had null values.
+        # This ensures empty-tree inputs [] still get build_tree() called.
+        arg_is_tree = ${JSON.stringify(argIsLikelyTree)}
 
         for tc_idx, parsed_input in enumerate(all_inputs):
             try:
@@ -175,17 +198,20 @@ if __name__ == '__main__':
                     annotation = (param_annotations[i] if i < len(param_annotations) else '').lower()
                     stype = schema_types.get(k, '').lower()
 
-                    is_tree = 'treenode' in annotation or 'treenode' in stype or stype == 'tree'
-                    is_list = 'listnode' in annotation or 'listnode' in stype or stype in ('linked_list', 'list')
+                    # Use pre-computed cross-test-case tree flag as primary signal.
+                    # Falls back to annotation/schema, then per-test null heuristic.
+                    is_tree = (i < len(arg_is_tree) and arg_is_tree[i]) or \
+                              'treenode' in annotation or 'treenode' in stype or stype == 'tree'
+                    is_list = (not is_tree) and \
+                              ('listnode' in annotation or 'listnode' in stype or stype in ('linked_list', 'list'))
 
                     if not is_tree and not is_list:
-                        # Heuristic fallback: if val is a list and looks like a flat BFS tree
-                        # (contains None/null values which int arrays don't), treat as tree
+                        # Last-resort heuristic: null values in val signal a tree
                         if isinstance(val, list) and any(v is None for v in val):
                             is_tree = True
 
                     if is_tree:
-                        val = build_tree(val)
+                        val = build_tree(val)  # build_tree([]) correctly returns None
                     elif is_list:
                         val = build_list(val)
 
