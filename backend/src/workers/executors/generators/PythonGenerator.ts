@@ -89,16 +89,18 @@ export class PythonGenerator implements CodeGenerator {
         // JSON.stringify produces lowercase true/false — Python needs True/False
         const argIsLikelyTreePy = '[' + argIsLikelyTree.map((v: boolean) => v ? 'True' : 'False').join(', ') + ']';
 
-        const driverCode = `
-
+        // Header: standard imports + data structure definitions
+        // MUST come before userCode so Optional, TreeNode, ListNode are defined
+        // when Python parses the user's class Solution type annotations.
+        const headerCode = `
 import json
 import sys
 import time
 import traceback
 from collections import deque
+from typing import Optional, List, Dict, Tuple, Set, Any
 
 sys.setrecursionlimit(10000)
-from typing import Optional, List, Dict, Tuple, Set, Any
 
 class TreeNode:
     def __init__(self, val=0, left=None, right=None):
@@ -110,9 +112,11 @@ class ListNode:
     def __init__(self, val=0, next=None):
         self.val = val
         self.next = next
+`;
 
+        // Footer: helper functions + main execution block
+        const footerCode = `
 def build_tree(data):
-    # Handle nested object format first (dict guard must come before list check)
     if isinstance(data, dict):
         node = TreeNode(data.get('val', data.get('value', 0)))
         node.left = build_tree(data.get('left'))
@@ -121,7 +125,7 @@ def build_tree(data):
     if not data or not isinstance(data, list) or data[0] is None:
         return None
     root = TreeNode(data[0])
-    q = deque([root])  # O(1) popleft instead of O(n) list.pop(0)
+    q = deque([root])
     i = 1
     while q and i < len(data):
         curr = q.popleft()
@@ -149,11 +153,10 @@ def serialize_result(result):
     if result is None:
         return None
     if isinstance(result, TreeNode):
-        # BFS serialize back to array
         out = []
-        q = [result]
+        q = deque([result])
         while q:
-            node = q.pop(0)
+            node = q.popleft()
             if node is None:
                 out.append(None)
             else:
@@ -202,24 +205,22 @@ if __name__ == '__main__':
                     else:
                         val = parsed_input
 
-                    # Determine type: Priority 1 = Python type annotation, Priority 2 = schema type
                     annotation = (param_annotations[i] if i < len(param_annotations) else '').lower()
                     stype = schema_types.get(k, '').lower()
 
                     # Use pre-computed cross-test-case tree flag as primary signal.
                     # Falls back to annotation/schema, then per-test null heuristic.
-                    is_tree = (i < len(arg_is_tree) and arg_is_tree[i]) or \
+                    is_tree = (i < len(arg_is_tree) and arg_is_tree[i]) or \\
                               'treenode' in annotation or 'treenode' in stype or stype == 'tree'
-                    is_list = (not is_tree) and \
+                    is_list = (not is_tree) and \\
                               ('listnode' in annotation or 'listnode' in stype or stype in ('linked_list', 'list'))
 
                     if not is_tree and not is_list:
-                        # Last-resort heuristic: null values in val signal a tree
                         if isinstance(val, list) and any(v is None for v in val):
                             is_tree = True
 
                     if is_tree:
-                        val = build_tree(val)  # build_tree([]) correctly returns None
+                        val = build_tree(val)
                     elif is_list:
                         val = build_list(val)
 
@@ -247,7 +248,9 @@ if __name__ == '__main__':
 `;
 
         return {
-            fullScript: `${userCode}\n\n${driverCode}`,
+            // Order: header (imports + TreeNode/ListNode) → userCode → footer (helpers + main)
+            // This ensures Optional, TreeNode, ListNode are defined before class Solution is parsed.
+            fullScript: `${headerCode}\n${userCode}\n${footerCode}`,
             scriptName: "runner.py",
             dockerCmd: `docker run --rm -i --net none --memory 256m --cpus 1 -v ${volumeMap} -w /usr/src/app python:3.9-slim python runner.py`,
             setupPromises: []
