@@ -21,13 +21,14 @@ export class SandboxRunner {
         await fs.writeFile(scriptPath, scriptContent, 'utf8');
 
         try {
-            // Map the host temp directory accurately into Docker safely isolated natively
             const volumeMap = `"${tmpDir}:/usr/src/app"`;
-            // Execute the mapped script explicitly bounded safely
-            const runCmd = `docker run --rm --net none --memory 512m --cpus 1 -v ${volumeMap} -w /usr/src/app node:20-slim sh -c "timeout -s KILL ${Math.ceil(timeoutMs / 1000)} node script.js"`;
+            const innerKillSecs = Math.ceil(timeoutMs / 1000);
+            const runCmd = `docker run --rm --net none --memory 512m --cpus 1 -v ${volumeMap} -w /usr/src/app node:20-slim sh -c "timeout -s KILL ${innerKillSecs} node script.js"`;
 
+            // Wall clock = script timeout + 15s for Docker startup overhead.
+            // This prevents Docker container spin-up time from counting against the script.
             const { stdout, stderr } = await execPromise(runCmd, {
-                timeout: timeoutMs,
+                timeout: timeoutMs + 15000,
                 cwd: tmpDir
             });
             return { stdout, stderr };
@@ -35,9 +36,8 @@ export class SandboxRunner {
             if (error.killed || error.code === 137) {
                 throw new Error(`Time Limit Exceeded: Script exceeded ${timeoutMs}ms runtime bounds.`);
             }
-            throw new Error(error.message || "Unknown Node runtime error natively globally crashed the underlying matrix bounds.");
+            throw new Error(error.message || "Unknown Node runtime error.");
         } finally {
-            // Clean up the temp sandbox dir only if we created it natively
             if (!customCwd) {
                 await fs.rm(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 1000 }).catch(console.error);
             }

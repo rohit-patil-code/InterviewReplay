@@ -168,7 +168,7 @@ ${currentScript}
                 }
 
                 console.log(`[ScriptAgent] Executing final scaled script attempt ${finalAttempt + 1}...`);
-                const { stderr } = await SandboxRunner.executeNodeScript(scaledScript, 3000, workingDirectory);
+                const { stderr } = await SandboxRunner.executeNodeScript(scaledScript, 10000, workingDirectory);
                 if (stderr) console.warn(`[ScriptAgent] Final Execution STDERR: ${stderr}`);
 
                 for (let i = 1; i <= 15; i++) {
