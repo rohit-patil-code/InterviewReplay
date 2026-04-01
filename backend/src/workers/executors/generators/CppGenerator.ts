@@ -223,8 +223,8 @@ string toJSON(int v){return to_string(v);}
 string toJSON(long long v){return to_string(v);}
 string toJSON(double v){return to_string(v);}
 string toJSON(bool v){return v?"true":"false";}
-string toJSON(char v){string s(1,v);return "\\""+s+"\\""; }
-string toJSON(const string& v){string r="\\"";for(char c:v){if(c=='"')r+="\\\\"";else r+=c;}return r+"\\""; }
+string toJSON(char v){char q=34;return string(1,q)+v+q;}
+string toJSON(const string& v){char q=34,b=92;string r(1,q);for(char c:v){if(c==q){r+=b;r+=q;}else r+=c;}return r+q;}
 string toJSON(const vector<int>& v){string r="[";for(size_t i=0;i<v.size();++i){r+=toJSON(v[i]);if(i<v.size()-1)r+=",";}return r+"]";}
 string toJSON(const vector<string>& v){string r="[";for(size_t i=0;i<v.size();++i){r+=toJSON(v[i]);if(i<v.size()-1)r+=",";}return r+"]";}
 string toJSON(const vector<vector<int>>& v){string r="[";for(size_t i=0;i<v.size();++i){r+=toJSON(v[i]);if(i<v.size()-1)r+=",";}return r+"]";}
@@ -243,7 +243,7 @@ int main(){
             cout<<"{\\"success\\":true,\\"result\\":"+toJSON(result)+",\\"runtimeMs\\":"+to_string(ms)+"}";
         }catch(const exception& e){
             string err=e.what(),ce="";
-            for(char c:err){if(c=='"')ce+="\\\\"";else ce+=c;}
+            for(char c:err){if(c==34||c==10||c==13)ce+=' ';else ce+=c;}
             cout<<"{\\"success\\":false,\\"error\\":\\""+ce+"\\"}";
         }catch(...){cout<<"{\\"success\\":false,\\"error\\":\\"Unknown C++ Exception\\"}";}
         if(i<${numTestCases - 1})cout<<",";
