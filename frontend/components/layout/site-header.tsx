@@ -58,7 +58,7 @@ export function SiteHeader() {
                     {/* Action */}
                     <Link
                         href="/dashboard"
-                        className="flex items-center gap-2 group/btn pl-1"
+                        className="hidden sm:flex items-center gap-2 group/btn pl-1"
                     >
                         <span className="text-xs font-semibold text-foreground/90 group-hover/btn:text-foreground transition-colors pb-px border-b border-transparent group-hover/btn:border-primary">
                             Start Reconstructing
