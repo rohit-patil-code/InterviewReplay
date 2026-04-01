@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Loader2, Mail, ArrowRight, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { useUser } from "@/components/providers/UserProvider";
 import { useRouter } from "next/navigation";
 import { authApi } from "@/lib/api";
 import { OTPInput } from "@/components/ui/otp-input";
@@ -36,6 +37,7 @@ function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
 
 export default function LoginPage() {
     const router = useRouter();
+    const { refreshUser } = useUser();
     const [step, setStep] = useState<"EMAIL" | "OTP">("EMAIL");
     const [email, setEmail] = useState("");
     const [otp, setOtp] = useState("");
@@ -51,6 +53,7 @@ export default function LoginPage() {
                 try {
                     // Send access_token instead of credential
                     await authApi.googleLogin(tokenResponse.access_token);
+                    await refreshUser();
                     router.push("/dashboard");
                 } catch (err: any) {
                     console.error("Google login API error:", err);
@@ -88,8 +91,7 @@ export default function LoginPage() {
         setIsLoading(true);
         try {
             const res = await authApi.loginVerifyOtp(email, otp);
-            // localStorage.setItem("token", res.data.token); // Token is now in HttpOnly cookie
-            // localStorage.setItem("user", JSON.stringify(res.data.user)); // Optional: User data can be verified via a /me endpoint instead
+            await refreshUser();
             router.push("/dashboard");
         } catch (err: any) {
             setError(err.response?.data?.error?.otp?._errors?.[0] || err.response?.data?.message || "Invalid OTP. Please try again.");

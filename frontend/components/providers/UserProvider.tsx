@@ -20,6 +20,7 @@ interface UserContextType {
     user: User | null;
     loading: boolean;
     setUser: (user: User | null) => void;
+    refreshUser: () => Promise<void>;
     logout: () => void;
 }
 
@@ -29,32 +30,31 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
 
+    const fetchUser = async () => {
+        setLoading(true);
+        try {
+            const response = await authApi.getMe();
+            setUser(response.data.user);
+        } catch (error) {
+            console.log("Failed to fetch user (might not be logged in)", error);
+            setUser(null);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // Fetch user only once on mount
     useEffect(() => {
-        const fetchUser = async () => {
-            try {
-                const response = await authApi.getMe();
-                // The backend returns { user: ... }
-                setUser(response.data.user);
-            } catch (error) {
-                console.log("Failed to fetch user (might not be logged in)", error);
-                setUser(null);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchUser();
     }, []);
 
     const logout = () => {
-        // In a real app you'd call an API to clear the cookie too
         setUser(null);
         window.location.href = "/";
     };
 
     return (
-        <UserContext.Provider value={{ user, loading, setUser, logout }}>
+        <UserContext.Provider value={{ user, loading, setUser, refreshUser: fetchUser, logout }}>
             {children}
         </UserContext.Provider>
     );
