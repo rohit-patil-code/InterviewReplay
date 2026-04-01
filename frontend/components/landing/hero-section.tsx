@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 
 export function HeroSection() {
     return (
-        <section className="container mx-auto px-4 py-20 md:py-32 flex flex-col items-center text-center space-y-8">
+        <section className="container mx-auto px-4 py-20 md:py-32 flex flex-col items-center text-center space-y-8 my-10">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight max-w-4xl text-balance animate-in fade-in slide-in-from-bottom-4 duration-700 leading-tight">
                 Don't Let a <span className="text-primary">Failed OA</span> Be a <br className="hidden md:block" /> Wasted Opportunity
             </h1>
