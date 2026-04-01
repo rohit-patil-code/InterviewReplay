@@ -92,8 +92,12 @@ export class PythonGenerator implements CodeGenerator {
         const driverCode = `
 
 import json
+import sys
 import time
 import traceback
+from collections import deque
+
+sys.setrecursionlimit(10000)
 
 class TreeNode:
     def __init__(self, val=0, left=None, right=None):
@@ -107,19 +111,19 @@ class ListNode:
         self.next = next
 
 def build_tree(data):
-    if data is None or not isinstance(data, list) or len(data) == 0 or data[0] is None:
-        return None
-    # Handle object-format trees the AI sometimes generates: {"val": 3, "left": {...}}
+    # Handle nested object format first (dict guard must come before list check)
     if isinstance(data, dict):
         node = TreeNode(data.get('val', data.get('value', 0)))
         node.left = build_tree(data.get('left'))
         node.right = build_tree(data.get('right'))
         return node
+    if not data or not isinstance(data, list) or data[0] is None:
+        return None
     root = TreeNode(data[0])
-    q = [root]
+    q = deque([root])  # O(1) popleft instead of O(n) list.pop(0)
     i = 1
-    while len(q) > 0 and i < len(data):
-        curr = q.pop(0)
+    while q and i < len(data):
+        curr = q.popleft()
         if i < len(data) and data[i] is not None:
             curr.left = TreeNode(data[i])
             q.append(curr.left)
