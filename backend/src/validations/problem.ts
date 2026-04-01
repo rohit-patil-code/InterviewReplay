@@ -13,6 +13,8 @@ export const ProblemSchema = z.object({
             explanation: z.string().optional(),
         })
     ).describe("2-3 input/output examples to clarify the problem"),
+    time_limit_ms: z.number().int().min(100).max(15000)
+        .describe("Per-test time limit in ms for a Java solution. 100–15000."),
 });
 
 export type ProblemData = z.infer<typeof ProblemSchema>;

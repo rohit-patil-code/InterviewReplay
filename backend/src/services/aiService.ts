@@ -44,12 +44,15 @@ const geminiProblemSchema: Schema = {
                     output: { type: SchemaType.STRING },
                     explanation: { type: SchemaType.STRING }
                 },
-                // 'explanation' is omitted here to match Zod's .optional()
                 required: ["input", "output"]
             }
+        },
+        time_limit_ms: {
+            type: SchemaType.INTEGER,
+            description: `Time limit per test case in milliseconds for a Java solution. Set this strictly based on the problem constraints and the expected OPTIMAL time complexity. Use these reference values: O(n) on n<=10^5: 500ms | O(n log n) on n<=10^5: 1000ms | O(n log n) on n<=10^6: 2000ms | O(n^2) on n<=10^3: 1000ms | O(n^2) on n<=10^4: 5000ms | O(2^n) on n<=20: 3000ms | O(n) tree/graph traversal on n<=10^4: 500ms. Minimum 100ms, maximum 15000ms.`
         }
     },
-    required: ["title", "difficulty", "company", "description", "constraints", "examples"]
+    required: ["title", "difficulty", "company", "description", "constraints", "examples", "time_limit_ms"]
 };
 
 // 2. Initialize the model with the strict response schema
@@ -80,6 +83,7 @@ CRITICAL INSTRUCTIONS FOR PROBLEM QUALITY:
 - Example outputs MUST be strings, even if it's a number like "5" or "true".
 - NO INTERNAL DOUBLE QUOTES: If you need to quote a string inside the description or explanations, use single quotes (e.g., 'abc') or backticks (\`abc\`).
 - NO PHYSICAL LINE BREAKS in JSON strings. Use literal '\\n' for newlines.
+- 'time_limit_ms': Set the per-test-case time limit (Java baseline, in ms) based on the problem's constraints and the OPTIMAL algorithm's expected complexity. Reference: O(n) on n<=10^5 → 500ms, O(n log n) on n<=10^5 → 1000ms, O(n^2) on n<=10^3 → 1000ms.
 
 Input Context:
 - Difficulty Estimate: ${difficulty || "Unknown"}

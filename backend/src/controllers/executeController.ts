@@ -134,11 +134,16 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
 
         const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-        const probRes = await pool.query('SELECT starter_code, solution_code, ai_output FROM problems WHERE id = $1', [problemId]);
+        const probRes = await pool.query(
+            'SELECT starter_code, solution_code, ai_output, time_limit_ms FROM problems WHERE id = $1',
+            [problemId]
+        );
         if (probRes.rows.length === 0) {
             res.status(404).json({ error: 'Problem not found' });
             return;
         }
+        // Java-baseline time limit per test case (ms). Default 2000ms for legacy problems.
+        const timeLimitMsJava: number = probRes.rows[0].time_limit_ms ?? 2000;
         const rawSchema = probRes.rows[0].solution_code;
         const schema = typeof rawSchema === 'string' ? JSON.parse(rawSchema) : rawSchema;
         const starterCodeMap = typeof probRes.rows[0].starter_code === 'string'
@@ -226,9 +231,29 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
             };
         }));
 
+        // Per-language multipliers relative to Java baseline
+        const LANGUAGE_MULTIPLIER: Record<string, number> = {
+            java:   1.0,
+            cpp:    0.5,   // native ≈ 2× faster than Java
+            python: 5.0,   // CPython ≈ 5× slower than Java
+        };
+        const adjustedLimitMs = Math.round(timeLimitMsJava * (LANGUAGE_MULTIPLIER[language] ?? 1.0));
+
         const batchInputs = preppedCases.map(p => p.sanitizedInputStr);
-        const batchTimeoutMs = mode === 'submit' ? 10000 : 8000;
-        const batchResults = await SandboxRunner.executeUserCode(code, language, userClassName, userFuncName, schema, batchInputs, batchTimeoutMs);
+        // Wall clock is 60s (infrastructure). TLE is detected via measured runtimeMs below.
+        const batchResults = await SandboxRunner.executeUserCode(code, language, userClassName, userFuncName, schema, batchInputs, 60000);
+
+        // Post-execution per-function TLE check (applies to both run and submit).
+        // runtimeMs is measured ONLY around the user's function call in driver code.
+        for (let i = 0; i < batchResults.length; i++) {
+            const r = batchResults[i];
+            if (r?.success && typeof r.runtimeMs === 'number' && r.runtimeMs > adjustedLimitMs) {
+                batchResults[i] = {
+                    success: false,
+                    error: `Time Limit Exceeded: function took ${Math.round(r.runtimeMs)}ms (limit: ${adjustedLimitMs}ms for ${language})`
+                };
+            }
+        }
 
         const results = [];
         let allPassed = true;

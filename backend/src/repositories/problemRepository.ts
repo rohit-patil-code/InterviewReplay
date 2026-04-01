@@ -7,13 +7,14 @@ export const create = async (
     company: string,
     difficulty: string,
     originalInput: any,
-    aiOutput: any
+    aiOutput: any,
+    timeLimitMs: number = 2000
 ): Promise<Problem> => {
     const result = await pool.query(
-        `INSERT INTO problems (user_id, title, company, difficulty, original_input, ai_output)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO problems (user_id, title, company, difficulty, original_input, ai_output, time_limit_ms)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING *`,
-        [userId, title, company, difficulty, originalInput, aiOutput]
+        [userId, title, company, difficulty, originalInput, aiOutput, timeLimitMs]
     );
     return result.rows[0];
 };

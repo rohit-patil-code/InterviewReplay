@@ -84,7 +84,8 @@ export const createProblem = async (req: Request, res: Response, next: NextFunct
             company || 'other',
             difficulty || 'medium',
             original_input,
-            ai_output
+            ai_output,
+            typeof ai_output?.time_limit_ms === 'number' ? ai_output.time_limit_ms : 2000
         );
         console.log(`[Producer] SUCCESS: Inserted problem into DB. Generated ID: ${problem.id}`);
 

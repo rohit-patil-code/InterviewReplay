@@ -92,16 +92,16 @@ export class SandboxRunner {
             await fs.writeFile(path.join(tmpDir, scriptName), fullScript, 'utf8');
 
             let boundDockerCmd = dockerCmd;
-            const tKill = Math.ceil(timeoutMs / 1000);
-            boundDockerCmd = boundDockerCmd.replace('python runner.py', `sh -c "timeout -s KILL ${tKill} python runner.py"`);
-            boundDockerCmd = boundDockerCmd.replace('node runner.js', `sh -c "timeout -s KILL ${tKill} node runner.js"`);
-            boundDockerCmd = boundDockerCmd.replace('sh -c "', `sh -c "timeout -s KILL ${tKill} `);
+            // Single clean timeout injection — 55s inner kill, 60s outer execPromise.
+            // This covers Docker startup + build_tree + all overhead without silently
+            // blaming the user's function for infrastructure latency.
+            boundDockerCmd = boundDockerCmd.replace('sh -c "', 'sh -c "timeout -s KILL 55 ');
 
             // 4. Secure Docker Sandbox Bootstrapping
             const { stdout, stderr } = await execPromise(boundDockerCmd, {
-                timeout: timeoutMs,
+                timeout: 60000,   // 60s wall clock — only hits for infinite loops
                 cwd: tmpDir,
-                maxBuffer: 1024 * 1024 * 50 // 50MB parsing natively bound
+                maxBuffer: 1024 * 1024 * 50
             });
 
             // 5. Decode mapping arrays natively identical decoupled safely
@@ -124,7 +124,7 @@ export class SandboxRunner {
             if (error.killed || error.code === 137) {
                 return testCaseInputs.map(() => ({
                     success: false,
-                    error: `Time Limit Exceeded: Executions exceeded ${timeoutMs}ms entirely mapping batch failures homogeneously.`
+                    error: `Sandbox killed after 60s (infinite loop or out of memory — not a TLE on your algorithm).`
                 }));
             }
             return testCaseInputs.map(() => ({
