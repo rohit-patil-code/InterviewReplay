@@ -103,7 +103,8 @@ export class JavaGenerator implements CodeGenerator {
             v !== null && typeof v === 'object' && !Array.isArray(v) &&
             ('val' in v || 'value' in v) && ('left' in v || 'right' in v);
 
-        const stringifyForJava = (val: any): string => {
+        const stringifyForJava = (val: any, alwaysJson: boolean = false): string => {
+            if (alwaysJson) return JSON.stringify(val);
             if (typeof val === 'string') return val;
             if (typeof val === 'number') return String(val);
             if (typeof val === 'boolean') return String(val);
@@ -131,11 +132,15 @@ export class JavaGenerator implements CodeGenerator {
 
 
         const JavaReaderGenerators: string[] = [];
+        const paramTypes = extractJavaParamTypes(userCode, functionName);
 
         testCaseInputs.forEach((inputStr, tcIdx) => {
             let parsedInput = JSON.parse(inputStr || "{}");
             schemaKeys.forEach((k: string, argIdx: number) => {
                 const argFile = path.join(tmpDir, `arg_${tcIdx}_${argIdx}.txt`);
+                const javaType = (paramTypes[argIdx] || '').toLowerCase().replace(/\s/g, '');
+                const isComplex = javaType.startsWith('list<') || javaType.startsWith('map<') || javaType.startsWith('arraylist<') || javaType.startsWith('hashmap<');
+
                 let val = null;
                 if (Array.isArray(parsedInput) && parsedInput.length > 0) {
                     if (parsedInput.length === 1 && typeof parsedInput[0] === 'object' && !Array.isArray(parsedInput[0]) && parsedInput[0][k] !== undefined) {
@@ -148,14 +153,9 @@ export class JavaGenerator implements CodeGenerator {
                 } else {
                     val = parsedInput;
                 }
-                setupPromises.push(fs.writeFile(argFile, stringifyForJava(val), 'utf8'));
+                setupPromises.push(fs.writeFile(argFile, stringifyForJava(val, isComplex), 'utf8'));
             });
         });
-
-        // PRIMARY: Extract param types directly from the user's function signature.
-        // This is the most reliable source — a TreeNode parameter means buildTree,
-        // an int[][] parameter means read2DIntArray, etc., regardless of schema.
-        const paramTypes = extractJavaParamTypes(userCode, functionName);
 
         schemaKeys.forEach((k: string, argIdx: number) => {
             const R = (expr: string) => `${expr}`; // shorthand
