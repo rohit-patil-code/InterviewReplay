@@ -112,15 +112,20 @@ export class JavaGenerator implements CodeGenerator {
                 return treeObjectToBFSArray(val).map((v: any) => v === null ? 'null' : v).join(',');
             }
             if (Array.isArray(val)) {
-                if (val.length === 0) return "";
-                // Check if it's an array of tree objects (rare but possible)
+                if (val.length === 0) return "[]";
+                // Check if it's an array of tree objects
                 if (val.length > 0 && isTreeObject(val[0])) {
                     return val.map((v: any) => isTreeObject(v) ? treeObjectToBFSArray(v).map((n: any) => n === null ? 'null' : n).join(',') : (v === null ? "null" : v)).join('\n');
+                }
+                // If it's an array of objects (like List<Map>), use raw JSON
+                if (val.length > 0 && typeof val[0] === 'object' && val[0] !== null) {
+                    return JSON.stringify(val);
                 }
                 if (Array.isArray(val[0])) return val.map(row => row.map((v: any) => v === null ? "null" : v).join(',')).join('\n');
                 if (typeof val[0] === 'string') return val.map((v: any) => v === null ? "null" : v).join('\n--END_OF_STRING--\n');
                 return val.map((v: any) => v === null ? "null" : v).join(',');
             }
+            if (typeof val === 'object' && val !== null) return JSON.stringify(val);
             return "";
         };
 
