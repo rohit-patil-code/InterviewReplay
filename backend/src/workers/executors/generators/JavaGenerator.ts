@@ -155,7 +155,7 @@ export class JavaGenerator implements CodeGenerator {
             // --- Priority 1: Use extracted Java type from function signature ---
             const javaType = (paramTypes[argIdx] || '').toLowerCase().replace(/\s/g, '');
             if (javaType.startsWith('list<') || javaType.startsWith('map<') || javaType.startsWith('arraylist<')) {
-                JavaReaderGenerators.push(`JsonAdapter.parse(${readStr}.trim())`);
+                JavaReaderGenerators.push(`(${paramTypes[argIdx]}) JsonAdapter.parse(${readStr}.trim())`);
                 return;
             }
             if (javaType === 'treenode') {
@@ -256,6 +256,7 @@ export class JavaGenerator implements CodeGenerator {
 import java.util.*;
 
 public class OARecall {
+    @SuppressWarnings("unchecked")
     public static void main(String[] args) {
         System.out.println("\\n---EXEC_RESULT---");
         System.out.print("[");
