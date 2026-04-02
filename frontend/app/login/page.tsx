@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition, useState } from "react";
+import { useTransition, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -45,6 +45,15 @@ export default function LoginPage() {
     const [isGoogleLoading, startGoogleTransition] = useTransition();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState("");
+    const { user, loading } = useUser();
+
+    // -- Auth Watcher --
+    // Automatically redirect to dashboard if the user is logged in
+    useEffect(() => {
+        if (!loading && user) {
+            router.push("/dashboard");
+        }
+    }, [user, loading, router]);
 
     const loginWithGoogle = useGoogleLogin({
         onSuccess: async (tokenResponse) => {

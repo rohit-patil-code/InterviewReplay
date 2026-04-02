@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { OTPInput } from "@/components/ui/otp-input";
 import { Loader2, Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { authApi } from "@/lib/api";
+import { useUser } from "@/components/providers/UserProvider";
 import { useGoogleLogin } from "@react-oauth/google";
 
 function GoogleIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -46,15 +47,25 @@ export default function RegisterPage() {
 
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState("");
+    const { user, loading, refreshUser } = useUser();
+
+    // -- Auth Watcher --
+    // Automatically redirect to dashboard if the user is logged in
+    useEffect(() => {
+        if (!loading && user) {
+            router.push("/dashboard");
+        }
+    }, [user, loading, router]);
 
     const signupWithGoogle = useGoogleLogin({
         onSuccess: async (tokenResponse) => {
             setError("");
             setIsLoading(true);
-            try {
-                await authApi.googleLogin(tokenResponse.access_token);
-                router.push("/dashboard");
-            } catch (err: any) {
+                try {
+                    await authApi.googleLogin(tokenResponse.access_token);
+                    await refreshUser();
+                    router.push("/dashboard");
+                } catch (err: any) {
                 console.error("Google login API error:", err);
                 setError(err.response?.data?.message || err.response?.data?.error || "Google sign-in failed on our servers.");
             } finally {
@@ -96,8 +107,7 @@ export default function RegisterPage() {
         setIsLoading(true);
         try {
             const res = await authApi.registerVerifyOtp(email, otp, firstName, lastName);
-            // localStorage.setItem("token", res.data.token);
-            // localStorage.setItem("user", JSON.stringify(res.data.user)); // Optional
+            await refreshUser();
             router.push("/dashboard"); // Successful registration logs you in
         } catch (err: any) {
             setError(err.response?.data?.error?.otp?._errors?.[0] || err.response?.data?.message || "Invalid OTP. Please try again.");
