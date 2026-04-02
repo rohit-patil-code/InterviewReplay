@@ -37,7 +37,12 @@ function extractJavaParamTypes(code: string, funcName: string): string[] {
     if (currentParam) params.push(currentParam.trim());
 
     // Extract type from each param string (e.g. "int[] nums" -> "int[]")
-    return params.map(p => p.trim().split(/\s+/)[0]);
+    // Use lastIndexOf(' ') to correctly handle types with spaces inside (like generics)
+    return params.map(p => {
+        const lastSpace = p.lastIndexOf(' ');
+        if (lastSpace === -1) return p;
+        return p.substring(0, lastSpace).trim();
+    });
 }
 
 export class JavaGenerator implements CodeGenerator {
