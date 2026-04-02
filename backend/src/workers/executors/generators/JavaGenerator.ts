@@ -10,13 +10,34 @@ import path from 'path';
  * returns ['int', 'int[][]']
  */
 function extractJavaParamTypes(code: string, funcName: string): string[] {
-    // Strip comment blocks before parsing to avoid matching types in commented-out definitions
+    // Strip comment blocks before parsing
     const stripped = code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
     const match = stripped.match(
         new RegExp(`(?:public|private|protected)?\\s*(?:static\\s+)?[\\w<>\\[\\]]+\\s+${funcName}\\s*\\(([^)]*)\\)`)
     );
     if (!match || !match[1].trim()) return [];
-    return match[1].trim().split(',').map(p => p.trim().split(/\s+/)[0]);
+
+    const paramsStr = match[1].trim();
+    const params: string[] = [];
+    let currentParam = "";
+    let bracketLevel = 0;
+
+    for (let i = 0; i < paramsStr.length; i++) {
+        const char = paramsStr[i];
+        if (char === '<' || char === '(') bracketLevel++;
+        if (char === '>' || char === ')') bracketLevel--;
+
+        if (char === ',' && bracketLevel === 0) {
+            params.push(currentParam.trim());
+            currentParam = "";
+        } else {
+            currentParam += char;
+        }
+    }
+    if (currentParam) params.push(currentParam.trim());
+
+    // Extract type from each param string (e.g. "int[] nums" -> "int[]")
+    return params.map(p => p.trim().split(/\s+/)[0]);
 }
 
 export class JavaGenerator implements CodeGenerator {
@@ -133,6 +154,10 @@ export class JavaGenerator implements CodeGenerator {
 
             // --- Priority 1: Use extracted Java type from function signature ---
             const javaType = (paramTypes[argIdx] || '').toLowerCase().replace(/\s/g, '');
+            if (javaType.startsWith('list<') || javaType.startsWith('map<') || javaType.startsWith('arraylist<')) {
+                JavaReaderGenerators.push(`JsonAdapter.parse(${readStr}.trim())`);
+                return;
+            }
             if (javaType === 'treenode') {
                 JavaReaderGenerators.push(`buildTree(${readStr}.trim())`);
                 return;
@@ -322,6 +347,77 @@ public class OARecall {
             }
         }
         return dummy.next;
+    }
+
+    public static class JsonAdapter {
+        public static Object parse(String json) {
+            json = json.trim();
+            if (json.startsWith("[")) return parseList(json);
+            if (json.startsWith("{")) return parseMap(json);
+            if (json.startsWith("\\"")) return json.substring(1, json.length() - 1).replace("\\\\\\\"", "\\"");
+            if (json.equals("true")) return true;
+            if (json.equals("false")) return false;
+            if (json.equals("null")) return null;
+            try { return Double.parseDouble(json); } catch (Exception e) {}
+            return json;
+        }
+
+        private static List<Object> parseList(String json) {
+            List<Object> list = new ArrayList<>();
+            String inner = json.substring(1, json.length() - 1).trim();
+            if (inner.isEmpty()) return list;
+            int level = 0;
+            boolean inQuotes = false;
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < inner.length(); i++) {
+                char c = inner.charAt(i);
+                if (c == '\\"') inQuotes = !inQuotes;
+                if (!inQuotes) {
+                    if (c == '[' || c == '{') level++;
+                    if (c == ']' || c == '}') level--;
+                }
+                if (c == ',' && level == 0 && !inQuotes) {
+                    list.add(parse(sb.toString()));
+                    sb = new StringBuilder();
+                } else {
+                    sb.append(c);
+                }
+            }
+            list.add(parse(sb.toString()));
+            return list;
+        }
+
+        private static Map<String, Object> parseMap(String json) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            String inner = json.substring(1, json.length() - 1).trim();
+            if (inner.isEmpty()) return map;
+            int level = 0;
+            boolean inQuotes = false;
+            StringBuilder sb = new StringBuilder();
+            String key = null;
+            for (int i = 0; i < inner.length(); i++) {
+                char c = inner.charAt(i);
+                if (c == '\\"') inQuotes = !inQuotes;
+                if (!inQuotes) {
+                    if (c == '[' || c == '{') level++;
+                    if (c == ']' || c == '}') level--;
+                    if (c == ':' && level == 0) {
+                        key = sb.toString().trim();
+                        if (key.startsWith("\\"")) key = key.substring(1, key.length() - 1);
+                        sb = new StringBuilder();
+                        continue;
+                    }
+                }
+                if (c == ',' && level == 0 && !inQuotes) {
+                    map.put(key, parse(sb.toString()));
+                    sb = new StringBuilder();
+                } else {
+                    sb.append(c);
+                }
+            }
+            map.put(key, parse(sb.toString()));
+            return map;
+        }
     }
 
     public static String toJSON(Object obj) {

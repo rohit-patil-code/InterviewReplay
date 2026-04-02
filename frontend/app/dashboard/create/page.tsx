@@ -428,6 +428,7 @@ function CreateProblemContent() {
   const [isSaving, setIsSaving] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState("config");
   const editId = searchParams.get("edit");
   const isEditMode = !!editId;
 
@@ -456,6 +457,7 @@ function CreateProblemContent() {
 
   const handleGenerateSuccess = (data: any) => {
     setGeneratedData(data);
+    setActiveTab("preview");
   };
 
   const handleSave = async () => {
@@ -515,7 +517,11 @@ function CreateProblemContent() {
 
       {/* MOBILE VIEW */}
       <div className="block md:hidden h-full w-full">
-        <Tabs defaultValue="config" className="h-full flex flex-col">
+        <Tabs 
+          value={activeTab} 
+          onValueChange={setActiveTab} 
+          className="h-full flex flex-col"
+        >
           <div className="border-b px-4 py-2 bg-background">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="config" className="flex items-center gap-2">
