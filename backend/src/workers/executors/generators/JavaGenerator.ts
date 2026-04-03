@@ -107,7 +107,6 @@ public class OARecall {
     }
 
     @SuppressWarnings("unchecked")
-    @SuppressWarnings("unchecked")
 private static Object[] buildArguments(Object rawArgs, Type[] paramTypes, String[] schemaKeys) throws Exception {
     Object[] args = new Object[paramTypes.length];
 
