@@ -107,70 +107,104 @@ public class OARecall {
     }
 
     @SuppressWarnings("unchecked")
-    private static Object[] buildArguments(Object rawArgs, Type[] paramTypes, String[] schemaKeys) throws Exception {
-        Object[] args = new Object[paramTypes.length];
-        
-        List<Object> argsList = null;
-        Map<String, Object> argsMap = null;
-        
-        if (rawArgs instanceof List) {
-            argsList = (List<Object>) rawArgs;
-        } else if (rawArgs instanceof Map) {
-            argsMap = (Map<String, Object>) rawArgs;
-        }
-        
-        for (int i = 0; i < paramTypes.length; i++) {
-            Object rawArgVal = null;
-            if (argsList != null) {
-                // If the entire array itself represents the single TreeNode argument
-                if (paramTypes.length == 1 && argsList.size() > 1 && !(argsList.get(0) instanceof List) && !(argsList.get(0) instanceof Map)) {
-                    rawArgVal = argsList;
-                } } else if (argsList.size() == 1 && argsList.get(0) instanceof Map) {
-    Map<String, Object> m = (Map<String, Object>) argsList.get(0);
+    @SuppressWarnings("unchecked")
+private static Object[] buildArguments(Object rawArgs, Type[] paramTypes, String[] schemaKeys) throws Exception {
+    Object[] args = new Object[paramTypes.length];
 
-    // 🔥 PRIORITY FIX: if TreeNode expected, unwrap list if present
-    if (paramTypes[i] == TreeNode.class) {
-        for (Object v : m.values()) {
-            if (v instanceof List) {
-                rawArgVal = v;
-                break;
-            }
-        }
-        if (rawArgVal != null) {
-            // already set correctly
-        } else if (i < schemaKeys.length && m.containsKey(schemaKeys[i])) {
-            rawArgVal = m.get(schemaKeys[i]);
-        } else {
-            rawArgVal = m;
-        }
-    } else {
-        if (i < schemaKeys.length && m.containsKey(schemaKeys[i])) {
-            rawArgVal = m.get(schemaKeys[i]);
-        } else if (m.size() == 1 && m.values().iterator().next() instanceof List) {
-            rawArgVal = m.values().iterator().next();
-        } else {
-            rawArgVal = m;
-        }
+    List<Object> argsList = null;
+    Map<String, Object> argsMap = null;
+
+    if (rawArgs instanceof List) {
+        argsList = (List<Object>) rawArgs;
+    } else if (rawArgs instanceof Map) {
+        argsMap = (Map<String, Object>) rawArgs;
     }
-} else if (i < argsList.size()) {
-                    rawArgVal = argsList.get(i);
-                }
-            } else if (argsMap != null) {
-                // Key-based fetch
-                if (i < schemaKeys.length && argsMap.containsKey(schemaKeys[i])) {
-                    rawArgVal = argsMap.get(schemaKeys[i]);
-                } else if (argsMap.size() == 1 && argsMap.values().iterator().next() instanceof List) { 
-                    rawArgVal = argsMap.values().iterator().next(); // Safe unwrap single-key wrapper
+
+    for (int i = 0; i < paramTypes.length; i++) {
+        Object rawArgVal = null;
+
+        if (argsList != null) {
+
+            // Case 1: single TreeNode passed as flat array
+            if (paramTypes.length == 1 
+                && argsList.size() > 1 
+                && !(argsList.get(0) instanceof List) 
+                && !(argsList.get(0) instanceof Map)) {
+
+                rawArgVal = argsList;
+
+            }
+            // Case 2: wrapped inside map like [{ "root": [...] }]
+            else if (argsList.size() == 1 && argsList.get(0) instanceof Map) {
+
+                Map<String, Object> m = (Map<String, Object>) argsList.get(0);
+
+                if (paramTypes[i] == TreeNode.class) {
+
+                    // 🔥 Prefer any List inside map
+                    for (Object v : m.values()) {
+                        if (v instanceof List) {
+                            rawArgVal = v;
+                            break;
+                        }
+                    }
+
+                    // fallback: schema key
+                    if (rawArgVal == null && i < schemaKeys.length && m.containsKey(schemaKeys[i])) {
+                        rawArgVal = m.get(schemaKeys[i]);
+                    }
+
+                    // fallback: nested map → extract list again
+                    if (rawArgVal instanceof Map) {
+                        for (Object v : ((Map<?, ?>) rawArgVal).values()) {
+                            if (v instanceof List) {
+                                rawArgVal = v;
+                                break;
+                            }
+                        }
+                    }
+
+                    // final fallback
+                    if (rawArgVal == null) {
+                        rawArgVal = m;
+                    }
+
                 } else {
-                    rawArgVal = argsMap;
+                    // Non-tree handling
+                    if (i < schemaKeys.length && m.containsKey(schemaKeys[i])) {
+                        rawArgVal = m.get(schemaKeys[i]);
+                    } else if (m.size() == 1 && m.values().iterator().next() instanceof List) {
+                        rawArgVal = m.values().iterator().next();
+                    } else {
+                        rawArgVal = m;
+                    }
                 }
-            } else {
-                rawArgVal = rawArgs;
+
             }
-            args[i] = JSONConverter.convertToType(rawArgVal, paramTypes[i]);
+            // Case 3: normal positional args
+            else if (i < argsList.size()) {
+                rawArgVal = argsList.get(i);
+            }
+
+        } else if (argsMap != null) {
+
+            if (i < schemaKeys.length && argsMap.containsKey(schemaKeys[i])) {
+                rawArgVal = argsMap.get(schemaKeys[i]);
+            } else if (argsMap.size() == 1 && argsMap.values().iterator().next() instanceof List) {
+                rawArgVal = argsMap.values().iterator().next();
+            } else {
+                rawArgVal = argsMap;
+            }
+
+        } else {
+            rawArgVal = rawArgs;
         }
-        return args;
+
+        args[i] = JSONConverter.convertToType(rawArgVal, paramTypes[i]);
     }
+
+    return args;
+}
 
     public static class JSONConverter {
         @SuppressWarnings("unchecked")
