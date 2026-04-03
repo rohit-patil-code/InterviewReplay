@@ -41,7 +41,7 @@ function sanitizeInputToJson(inputStr: string, schema: any): string {
         } else if (schema?.type && typeof schema.type === 'string' && schema.type !== 'object') {
             order = ['single_arg'];
         } else {
-            const realKeys = Object.keys(schema || {}).filter((k: string) => !['type','minDepth','maxDepth','edgeCases','minLength','maxLength','minSize','maxSize','minVal','maxVal','minN','maxN','min','max','min_depth','max_depth','null_probability','cases','items','order','properties'].includes(k));
+            const realKeys = Object.keys(schema || {}).filter((k: string) => !['type', 'minDepth', 'maxDepth', 'edgeCases', 'minLength', 'maxLength', 'minSize', 'maxSize', 'minVal', 'maxVal', 'minN', 'maxN', 'min', 'max', 'min_depth', 'max_depth', 'null_probability', 'cases', 'items', 'order', 'properties'].includes(k));
             order = realKeys.length > 0 ? realKeys : ['single_arg'];
         }
     }
@@ -154,46 +154,62 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
 
         let userClassName = "";
         let userFuncName = "";
+        let returnTypeStr = "";
 
         // Strip block and line comments BEFORE scanning for class/function names.
-        // This prevents matching class names like 'TreeNode' from /** ... */ comment blocks.
-        const codeForParsing = code
+        // Use expectedStarter if available to strictly guarantee original signature typings
+        const codeForParsing = (expectedStarter || code)
             .replace(/\/\*[\s\S]*?\*\//g, '')  // remove /* ... */ blocks
             .replace(/\/\/[^\n]*/g, '')          // remove // line comments
             .replace(/#[^\n]*/g, '');            // remove # line comments (Python)
 
         if (language === 'cpp') {
-            const match = codeForParsing.match(/class\s+([a-zA-Z0-9_]+)[\s\S]*?(?:public\s*:\s*)?[\w<>,:*&\s]+\s+([a-zA-Z0-9_]+)\s*\(/);
+            const match = codeForParsing.match(/class\s+([a-zA-Z0-9_]+)[\s\S]*?(?:public\s*:\s*)?([\w<>,:*&\s]+)\s+([a-zA-Z0-9_]+)\s*\(/);
             if (!match) {
                 res.status(400).json({ error: "Invalid C++ definition" });
                 return;
             }
             userClassName = match[1];
-            userFuncName = match[2];
+            returnTypeStr = match[2];
+            userFuncName = match[3];
         } else if (language === 'python') {
-            const match = codeForParsing.match(/class\s+([a-zA-Z0-9_]+)[({:]?[\s\S]*?def\s+([a-zA-Z0-9_]+)\s*\(/);
+            const match = codeForParsing.match(/class\s+([a-zA-Z0-9_]+)[({:]?[\s\S]*?def\s+([a-zA-Z0-9_]+)\s*\([\s\S]*?\)\s*(?:->\s*([\w\[\] ,]+))?:/);
             if (!match) {
                 res.status(400).json({ error: "Invalid Python definition" });
                 return;
             }
             userClassName = match[1];
             userFuncName = match[2];
+            returnTypeStr = match[3] || "";
         } else if (language === 'java') {
             // Prefer matching 'class Solution' explicitly (almost all LeetCode Java uses this)
-            const solutionMatch = codeForParsing.match(/class\s+Solution\s*(?:implements[^{]*)?\s*\{[\s\S]*?(?:public|private|protected)?\s*(?:static\s+)?[\w<>[\]]+\s+([a-zA-Z0-9_]+)\s*\(/);
+            const solutionMatch = codeForParsing.match(/class\s+Solution\s*(?:implements[^{]*)?\s*\{[\s\S]*?(?:public|private|protected)?\s*(?:static\s+)?([\w<>[\]]+)\s+([a-zA-Z0-9_]+)\s*\(/);
             if (solutionMatch) {
                 userClassName = 'Solution';
-                userFuncName = solutionMatch[1];
+                returnTypeStr = solutionMatch[1];
+                userFuncName = solutionMatch[2];
             } else {
-                const fallback = codeForParsing.match(/class\s+([a-zA-Z0-9_]+)\s*\{[\s\S]*?(?:public|private|protected)?\s*(?:static\s+)?[\w<>[\]]+\s+([a-zA-Z0-9_]+)\s*\(/);
+                const fallback = codeForParsing.match(/class\s+([a-zA-Z0-9_]+)\s*\{[\s\S]*?(?:public|private|protected)?\s*(?:static\s+)?([\w<>[\]]+)\s+([a-zA-Z0-9_]+)\s*\(/);
                 if (!fallback) {
                     res.status(400).json({ error: "Invalid Java definition" });
                     return;
                 }
                 userClassName = fallback[1];
-                userFuncName = fallback[2];
+                returnTypeStr = fallback[2];
+                userFuncName = fallback[3];
             }
         }
+
+        function normalizeReturnType(rt: string): string {
+            if (!rt) return 'unknown';
+            rt = rt.trim().toLowerCase();
+            if (rt.includes('[') || rt.includes('<') || rt.includes('vector') || rt.includes('list') || rt.includes('array') || rt.includes('node')) return 'array';
+            if (['int', 'long', 'double', 'float', 'short', 'integer', 'number'].some(p => rt.includes(p))) return 'number';
+            if (['string', 'str', 'char'].some(p => rt.includes(p))) return 'string';
+            if (['boolean', 'bool'].some(p => rt.includes(p))) return 'boolean';
+            return 'object'; 
+        }
+        const expectedPrimitiveType = normalizeReturnType(returnTypeStr);
 
         let testCases: any[] = [];
         let exampleCases: any[] = [];
@@ -233,8 +249,8 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
 
         // Per-language multipliers relative to Java baseline
         const LANGUAGE_MULTIPLIER: Record<string, number> = {
-            java:   1.0,
-            cpp:    0.5,   // native ≈ 2× faster than Java
+            java: 1.0,
+            cpp: 0.5,   // native ≈ 2× faster than Java
             python: 5.0,   // CPython ≈ 5× slower than Java
         };
         const adjustedLimitMs = Math.round(timeLimitMsJava * (LANGUAGE_MULTIPLIER[language] ?? 1.0));
@@ -267,7 +283,22 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
 
             if (execRes.success && userOutputClean !== undefined) {
                 try {
-                    if (userOutputClean === prep.expectedClean || JSON.stringify(JSON.parse(userOutputClean)) === JSON.stringify(JSON.parse(prep.expectedClean))) {
+                    let parsedExp = JSON.parse(prep.expectedClean);
+                    
+                    if (expectedPrimitiveType === 'number' && typeof parsedExp === 'string') {
+                        if (!isNaN(Number(parsedExp))) parsedExp = Number(parsedExp);
+                    } else if (expectedPrimitiveType === 'string' && typeof parsedExp === 'number') {
+                        parsedExp = String(parsedExp);
+                    } else if (expectedPrimitiveType === 'boolean' && typeof parsedExp === 'string') {
+                        if (parsedExp.toLowerCase() === 'true') parsedExp = true;
+                        if (parsedExp.toLowerCase() === 'false') parsedExp = false;
+                    } else if ((expectedPrimitiveType === 'array' || expectedPrimitiveType === 'object') && typeof parsedExp === 'string') {
+                        try { parsedExp = JSON.parse(parsedExp); } catch (e) {}
+                    }
+                    
+                    const normalizedExpectedString = JSON.stringify(parsedExp);
+
+                    if (userOutputClean === prep.expectedClean || userOutputClean === normalizedExpectedString || JSON.stringify(JSON.parse(userOutputClean)) === normalizedExpectedString) {
                         passed = true;
                     }
                 } catch (e: any) {
