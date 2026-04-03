@@ -10,7 +10,7 @@ export class JavaGenerator implements CodeGenerator {
         let firstParsed: any = {};
         try {
             firstParsed = JSON.parse(testCaseInputs[0] || "{}");
-        } catch (e) {}
+        } catch (e) { }
 
         let schemaKeys = schema?.order;
         if (!schemaKeys) {
@@ -122,20 +122,47 @@ public class OARecall {
         for (int i = 0; i < paramTypes.length; i++) {
             Object rawArgVal = null;
             if (argsList != null) {
-                // Positional fetch
-                if (argsList.size() == 1 && argsList.get(0) instanceof Map && schemaKeys.length > i) {
-                    rawArgVal = ((Map<String, Object>) argsList.get(0)).get(schemaKeys[i]);
-                } else if (i < argsList.size()) {
+                // If the entire array itself represents the single TreeNode argument
+                if (paramTypes.length == 1 && argsList.size() > 1 && !(argsList.get(0) instanceof List) && !(argsList.get(0) instanceof Map)) {
+                    rawArgVal = argsList;
+                } } else if (argsList.size() == 1 && argsList.get(0) instanceof Map) {
+    Map<String, Object> m = (Map<String, Object>) argsList.get(0);
+
+    // 🔥 PRIORITY FIX: if TreeNode expected, unwrap list if present
+    if (paramTypes[i] == TreeNode.class) {
+        for (Object v : m.values()) {
+            if (v instanceof List) {
+                rawArgVal = v;
+                break;
+            }
+        }
+        if (rawArgVal != null) {
+            // already set correctly
+        } else if (i < schemaKeys.length && m.containsKey(schemaKeys[i])) {
+            rawArgVal = m.get(schemaKeys[i]);
+        } else {
+            rawArgVal = m;
+        }
+    } else {
+        if (i < schemaKeys.length && m.containsKey(schemaKeys[i])) {
+            rawArgVal = m.get(schemaKeys[i]);
+        } else if (m.size() == 1 && m.values().iterator().next() instanceof List) {
+            rawArgVal = m.values().iterator().next();
+        } else {
+            rawArgVal = m;
+        }
+    }
+} else if (i < argsList.size()) {
                     rawArgVal = argsList.get(i);
                 }
             } else if (argsMap != null) {
                 // Key-based fetch
                 if (i < schemaKeys.length && argsMap.containsKey(schemaKeys[i])) {
                     rawArgVal = argsMap.get(schemaKeys[i]);
-                } else if (argsMap.size() == 1) { // Fallback if schema key misses
-                    rawArgVal = argsMap.values().iterator().next();
+                } else if (argsMap.size() == 1 && argsMap.values().iterator().next() instanceof List) { 
+                    rawArgVal = argsMap.values().iterator().next(); // Safe unwrap single-key wrapper
                 } else {
-                    rawArgVal = rawArgs;
+                    rawArgVal = argsMap;
                 }
             } else {
                 rawArgVal = rawArgs;

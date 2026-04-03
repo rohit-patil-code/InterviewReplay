@@ -48,10 +48,10 @@ export default function PracticePage() {
         const starterCode = problem.starter_code;
         // Case-insensitive lookup (matching 'python' with 'Python', 'cpp' with 'C++', etc.)
         const matchedKey = Object.keys(starterCode).find(
-            key => key.toLowerCase() === langId.toLowerCase() || 
-                   (langId === 'cpp' && key === 'C++') ||
-                   (langId === 'python' && key === 'Python') ||
-                   (langId === 'java' && key === 'Java')
+            key => key.toLowerCase() === langId.toLowerCase() ||
+                (langId === 'cpp' && key === 'C++') ||
+                (langId === 'python' && key === 'Python') ||
+                (langId === 'java' && key === 'Java')
         );
         return matchedKey ? starterCode[matchedKey] : null;
     };
@@ -139,6 +139,9 @@ export default function PracticePage() {
         return () => clearTimeout(autoSaveTimer);
     }, [code, language.id, problem]);
 
+
+
+    //Handle submit and run
     const handleExecute = async (mode: 'run' | 'submit') => {
         setIsExecuting(true);
         setExecutionResults({ mode, pending: true });
