@@ -267,32 +267,11 @@ export const executeCode = async (req: Request, res: Response, next: NextFunctio
 
             if (execRes.success && userOutputClean !== undefined) {
                 try {
-                    let parsedUser = JSON.parse(userOutputClean);
-                    let parsedExp = JSON.parse(prep.expectedClean);
-                    
-                    const looseEqual = (a: any, b: any): boolean => {
-                        if (a === b) return true;
-                        if (typeof a !== 'object' && typeof b !== 'object') return String(a) === String(b);
-                        if (Array.isArray(a) && Array.isArray(b)) {
-                            if (a.length !== b.length) return false;
-                            for (let j = 0; j < a.length; j++) if (!looseEqual(a[j], b[j])) return false;
-                            return true;
-                        }
-                        if (a && b && typeof a === 'object' && typeof b === 'object') {
-                            const keysA = Object.keys(a);
-                            if (keysA.length !== Object.keys(b).length) return false;
-                            for (const k of keysA) if (!looseEqual(a[k], b[k])) return false;
-                            return true;
-                        }
-                        return false;
-                    };
-
-                    if (userOutputClean === prep.expectedClean || JSON.stringify(parsedUser) === JSON.stringify(parsedExp) || looseEqual(parsedUser, parsedExp)) {
+                    if (userOutputClean === prep.expectedClean || JSON.stringify(JSON.parse(userOutputClean)) === JSON.stringify(JSON.parse(prep.expectedClean))) {
                         passed = true;
                     }
                 } catch (e: any) {
                     if (userOutputClean === prep.expectedClean) passed = true;
-                    else if (String(userOutputClean).replace(/^"|"$/g, '') === String(prep.expectedClean).replace(/^"|"$/g, '')) passed = true;
                 }
             }
 
