@@ -2,54 +2,11 @@ import { CodeGenerator, ExecutionContext, GeneratorResult } from "./CodeGenerato
 import fs from 'fs/promises';
 import path from 'path';
 
-/**
- * Extracts the Java type of each parameter in the given function signature.
- * e.g. for 'public int maxDepth(TreeNode root)' with funcName='maxDepth'
- * returns ['TreeNode']
- * e.g. for 'public boolean isValidTree(int n, int[][] edges)'
- * returns ['int', 'int[][]']
- */
-function extractJavaParamTypes(code: string, funcName: string): string[] {
-    // Strip comment blocks before parsing
-    const stripped = code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-    const match = stripped.match(
-        new RegExp(`(?:public|private|protected)?\\s*(?:static\\s+)?[\\w<>\\[\\]]+\\s+${funcName}\\s*\\(([^)]*)\\)`)
-    );
-    if (!match || !match[1].trim()) return [];
-
-    const paramsStr = match[1].trim();
-    const params: string[] = [];
-    let currentParam = "";
-    let bracketLevel = 0;
-
-    for (let i = 0; i < paramsStr.length; i++) {
-        const char = paramsStr[i];
-        if (char === '<' || char === '(') bracketLevel++;
-        if (char === '>' || char === ')') bracketLevel--;
-
-        if (char === ',' && bracketLevel === 0) {
-            params.push(currentParam.trim());
-            currentParam = "";
-        } else {
-            currentParam += char;
-        }
-    }
-    if (currentParam) params.push(currentParam.trim());
-
-    // Extract type from each param string (e.g. "int[] nums" -> "int[]")
-    // Use lastIndexOf(' ') to correctly handle types with spaces inside (like generics)
-    return params.map(p => {
-        const lastSpace = p.lastIndexOf(' ');
-        if (lastSpace === -1) return p;
-        return p.substring(0, lastSpace).trim();
-    });
-}
-
 export class JavaGenerator implements CodeGenerator {
     generate(context: ExecutionContext): GeneratorResult {
         const { userCode, className, functionName, schema, testCaseInputs, tmpDir, volumeMap } = context;
 
-        const numTestCases = testCaseInputs.length;
+        // Extract first input just to figure out parameter names (schema keys) safely
         let firstParsed: any = {};
         try {
             firstParsed = JSON.parse(testCaseInputs[0] || "{}");
@@ -58,7 +15,6 @@ export class JavaGenerator implements CodeGenerator {
         let schemaKeys = schema?.order;
         if (!schemaKeys) {
             if (Array.isArray(firstParsed)) {
-                // Safely assume array elements map to positional arguments
                 schemaKeys = firstParsed.map((_, i) => String(i));
             } else {
                 const propKeys = Object.keys(schema?.properties || {});
@@ -67,203 +23,36 @@ export class JavaGenerator implements CodeGenerator {
                 } else if (schema?.type && typeof schema.type === 'string' && schema.type !== 'object') {
                     schemaKeys = ['single_arg'];
                 } else {
-                    // Filter out known metadata keys to find real parameter names
                     const realKeys = Object.keys(schema || {}).filter((k: string) => !['type', 'minDepth', 'maxDepth', 'edgeCases', 'minLength', 'maxLength', 'minSize', 'maxSize', 'minVal', 'maxVal', 'minN', 'maxN', 'min', 'max', 'min_depth', 'max_depth', 'null_probability', 'cases', 'items', 'order', 'properties'].includes(k));
                     if (realKeys.length > 0) {
                         schemaKeys = realKeys;
                     } else {
-                        // Truly single-argument schema
                         schemaKeys = ['single_arg'];
                     }
                 }
             }
         }
-        const setupPromises: Promise<void>[] = [];
 
-        // Converts a tree object {val/value, left, right} to LeetCode BFS array [3,9,20,null,null,15,7]
-        const treeObjectToBFSArray = (root: any): (number | null)[] => {
-            if (!root) return [];
-            const result: (number | null)[] = [];
-            const queue: any[] = [root];
-            while (queue.length > 0) {
-                const node = queue.shift();
-                if (node === null || node === undefined) {
-                    result.push(null);
-                } else {
-                    result.push(node.val !== undefined ? node.val : node.value);
-                    queue.push(node.left ?? null);
-                    queue.push(node.right ?? null);
-                }
+        // We stringify the entire test cases array, leaving it exactly as raw parsed JSON objects
+        const testcasesJson = JSON.stringify(testCaseInputs.map(inputStr => {
+            try {
+                return JSON.parse(inputStr || "{}");
+            } catch (e) {
+                return {};
             }
-            while (result.length > 0 && result[result.length - 1] === null) result.pop();
-            return result;
-        };
+        }));
 
-        const isTreeObject = (v: any): boolean =>
-            v !== null && typeof v === 'object' && !Array.isArray(v) &&
-            ('val' in v || 'value' in v) && ('left' in v || 'right' in v);
+        const testcasesFile = path.join(tmpDir, 'testcases.json');
+        const setupPromises = [fs.writeFile(testcasesFile, testcasesJson, 'utf8')];
 
-        const stringifyForJava = (val: any, alwaysJson: boolean = false): string => {
-            if (alwaysJson) return JSON.stringify(val);
-            if (typeof val === 'string') return val;
-            if (typeof val === 'number') return String(val);
-            if (typeof val === 'boolean') return String(val);
-            // Defensive: AI sometimes generates {value, left, right} instead of flat BFS array
-            if (isTreeObject(val)) {
-                return treeObjectToBFSArray(val).map((v: any) => v === null ? 'null' : v).join(',');
-            }
-            if (Array.isArray(val)) {
-                if (val.length === 0) return "[]";
-                // Check if it's an array of tree objects
-                if (val.length > 0 && isTreeObject(val[0])) {
-                    return val.map((v: any) => isTreeObject(v) ? treeObjectToBFSArray(v).map((n: any) => n === null ? 'null' : n).join(',') : (v === null ? "null" : v)).join('\n');
-                }
-                // If it's an array of objects (like List<Map>), use raw JSON
-                if (val.length > 0 && typeof val[0] === 'object' && val[0] !== null) {
-                    return JSON.stringify(val);
-                }
-                if (Array.isArray(val[0])) return val.map(row => row.map((v: any) => v === null ? "null" : v).join(',')).join('\n');
-                if (typeof val[0] === 'string') return val.map((v: any) => v === null ? "null" : v).join('\n--END_OF_STRING--\n');
-                return val.map((v: any) => v === null ? "null" : v).join(',');
-            }
-            if (typeof val === 'object' && val !== null) return JSON.stringify(val);
-            return "";
-        };
-
-
-        const JavaReaderGenerators: string[] = [];
-        const paramTypes = extractJavaParamTypes(userCode, functionName);
-
-        testCaseInputs.forEach((inputStr, tcIdx) => {
-            let parsedInput = JSON.parse(inputStr || "{}");
-            schemaKeys.forEach((k: string, argIdx: number) => {
-                const argFile = path.join(tmpDir, `arg_${tcIdx}_${argIdx}.txt`);
-                const javaType = (paramTypes[argIdx] || '').toLowerCase().replace(/\s/g, '');
-                const isComplex = javaType.startsWith('list<') || javaType.startsWith('map<') || javaType.startsWith('arraylist<') || javaType.startsWith('hashmap<');
-
-                let val = null;
-                if (Array.isArray(parsedInput) && parsedInput.length > 0) {
-                    if (parsedInput.length === 1 && typeof parsedInput[0] === 'object' && !Array.isArray(parsedInput[0]) && parsedInput[0][k] !== undefined) {
-                        val = parsedInput[0][k];
-                    } else {
-                        val = parsedInput[argIdx];
-                    }
-                } else if (typeof parsedInput === 'object' && parsedInput !== null) {
-                    val = parsedInput[k];
-                } else {
-                    val = parsedInput;
-                }
-                setupPromises.push(fs.writeFile(argFile, stringifyForJava(val, isComplex), 'utf8'));
-            });
-        });
-
-        schemaKeys.forEach((k: string, argIdx: number) => {
-            const R = (expr: string) => `${expr}`; // shorthand
-            const argFile = `"arg_" + i + "_${argIdx}.txt"`;
-            const readStr = `new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(${argFile})), java.nio.charset.StandardCharsets.UTF_8)`;
-
-            // --- Priority 1: Use extracted Java type from function signature ---
-            const javaType = (paramTypes[argIdx] || '').toLowerCase().replace(/\s/g, '');
-            if (javaType.startsWith('list<') || javaType.startsWith('map<') || javaType.startsWith('arraylist<')) {
-                JavaReaderGenerators.push(`(${paramTypes[argIdx]}) JsonAdapter.parse(${readStr}.trim())`);
-                return;
-            }
-            if (javaType === 'treenode') {
-                JavaReaderGenerators.push(`buildTree(${readStr}.trim())`);
-                return;
-            }
-            if (javaType === 'listnode') {
-                JavaReaderGenerators.push(`buildList(${readStr}.trim())`);
-                return;
-            }
-            if (javaType === 'int[][]' || javaType === 'long[][]' || javaType === 'char[][]') {
-                JavaReaderGenerators.push(`read2DIntArray(${argFile})`);
-                return;
-            }
-            if (javaType === 'string[]') {
-                JavaReaderGenerators.push(`readStringArray(${argFile})`);
-                return;
-            }
-            if (javaType === 'int[]' || javaType === 'long[]' || javaType === 'short[]' || javaType === 'double[]') {
-                JavaReaderGenerators.push(`read1DIntArray(${argFile})`);
-                return;
-            }
-            if (javaType === 'char[]') {
-                JavaReaderGenerators.push(`${readStr}.trim().toCharArray()`);
-                return;
-            }
-            if (javaType === 'int' || javaType === 'short' || javaType === 'byte') {
-                JavaReaderGenerators.push(`Integer.parseInt(${readStr}.trim())`);
-                return;
-            }
-            if (javaType === 'long') {
-                JavaReaderGenerators.push(`Long.parseLong(${readStr}.trim())`);
-                return;
-            }
-            if (javaType === 'double' || javaType === 'float') {
-                JavaReaderGenerators.push(`Double.parseDouble(${readStr}.trim())`);
-                return;
-            }
-            if (javaType === 'boolean') {
-                JavaReaderGenerators.push(`Boolean.parseBoolean(${readStr}.trim())`);
-                return;
-            }
-            if (javaType === 'char') {
-                JavaReaderGenerators.push(`${readStr}.trim().charAt(0)`);
-                return;
-            }
-            if (javaType === 'string') {
-                JavaReaderGenerators.push(`${readStr}.trim()`);
-                return;
-            }
-
-            // --- Priority 2: Schema type (if param type extraction failed) ---
-            let schemaType = schema?.properties?.[k]?.type;
-            if (!schemaType && Array.isArray(schema?.order)) {
-                const orderItem = schema.order[argIdx];
-                if (orderItem && typeof orderItem === 'object') schemaType = orderItem.type || orderItem.dataType;
-            }
-            if (!schemaType) {
-                schemaType = schema?.type;
-                if (!schemaType && schema && typeof schema === 'object') schemaType = schema[k];
-            }
-            const normalizedType = String(schemaType).toLowerCase();
-            if (normalizedType === 'treenode' || normalizedType === 'tree') {
-                JavaReaderGenerators.push(`buildTree(${readStr}.trim())`);
-                return;
-            }
-            if (normalizedType === 'listnode' || normalizedType === 'linked_list' || normalizedType === 'list') {
-                JavaReaderGenerators.push(`buildList(${readStr}.trim())`);
-                return;
-            }
-
-            // --- Priority 3: Infer from the actual value ---
-            let val = null;
-            if (Array.isArray(firstParsed) && firstParsed.length > 0) {
-                val = firstParsed.length === 1 && typeof firstParsed[0] === 'object' && !Array.isArray(firstParsed[0]) && firstParsed[0][k] !== undefined
-                    ? firstParsed[0][k] : firstParsed[argIdx];
-            } else if (typeof firstParsed === 'object' && firstParsed !== null) {
-                val = firstParsed[k];
-            } else {
-                val = firstParsed;
-            }
-            if (typeof val === 'string')  { JavaReaderGenerators.push(`${readStr}`); return; }
-            if (typeof val === 'number')  { JavaReaderGenerators.push(`Integer.parseInt(${readStr}.trim())`); return; }
-            if (typeof val === 'boolean') { JavaReaderGenerators.push(`Boolean.parseBoolean(${readStr}.trim())`); return; }
-            if (Array.isArray(val)) {
-                if (val.length === 0) { JavaReaderGenerators.push(`new int[]{}`); return; }
-                if (Array.isArray(val[0])) { JavaReaderGenerators.push(`read2DIntArray(${argFile})`); return; }
-                if (typeof val[0] === 'string') { JavaReaderGenerators.push(`readStringArray(${argFile})`); return; }
-                JavaReaderGenerators.push(`read1DIntArray(${argFile})`);
-                return;
-            }
-            JavaReaderGenerators.push('null');
-        });
-
+        const schemaKeysJavaStr = schemaKeys.map((k: string) => `"${k}"`).join(", ");
         const cleanUserCode = userCode.replace(/public\s+class\s+([a-zA-Z0-9_]+)/g, 'class $1');
 
         const fullScript = `
 import java.util.*;
+import java.lang.reflect.*;
+import java.nio.file.*;
+import java.nio.charset.StandardCharsets;
 
 public class OARecall {
     @SuppressWarnings("unchecked")
@@ -271,93 +60,284 @@ public class OARecall {
         System.out.println("\\n---EXEC_RESULT---");
         System.out.print("[");
         
-        for (int i = 0; i < ${numTestCases}; i++) {
-            try {
-                ${className} instance = new ${className}();
-                long start = System.nanoTime();
-                Object result = instance.${functionName}(${JavaReaderGenerators.join(', ')});
-                long end = System.nanoTime();
-                
-                System.out.print("{\\"success\\": true, \\"result\\": " + toJSON(result) + ", \\"runtimeMs\\": " + ((end - start) / 1000000.0) + "}");
-            } catch (Exception e) {
-                System.out.print("{\\"success\\": false, \\"error\\": \\"" + e.toString().replace("\\"", "\\\\\\\"") + "\\", \\"stack\\": \\"" + arrayToString(e.getStackTrace()).replace("\\"", "\\\\\\\"").replace("\\n", "\\\\n") + "\\"}");
+        try {
+            String tcContent = new String(Files.readAllBytes(Paths.get("testcases.json")), StandardCharsets.UTF_8).trim();
+            List<Object> rawTestCases = (List<Object>) JsonAdapter.parse(tcContent);
+            String[] schemaKeys = new String[]{${schemaKeysJavaStr}};
+            
+            ${className} instance = new ${className}();
+            Method targetMethod = null;
+            for (Method m : instance.getClass().getDeclaredMethods()) {
+                if (m.getName().equals("${functionName}")) {
+                    targetMethod = m;
+                    break;
+                }
             }
-            if (i < ${numTestCases - 1}) System.out.print(",");
+            if (targetMethod == null) throw new NoSuchMethodException("Method ${functionName} not found in ${className}");
+            
+            Type[] paramTypes = targetMethod.getGenericParameterTypes();
+            
+            for (int i = 0; i < rawTestCases.size(); i++) {
+                try {
+                    Object rawTestCase = rawTestCases.get(i);
+                    Object[] finalArgs = buildArguments(rawTestCase, paramTypes, schemaKeys);
+                    
+                    long start = System.nanoTime();
+                    Object result = targetMethod.invoke(instance, finalArgs);
+                    long end = System.nanoTime();
+                    
+                    System.out.print("{\\"success\\": true, \\"result\\": " + toJSON(result) + ", \\"runtimeMs\\": " + ((end - start) / 1000000.0) + "}");
+                } catch (InvocationTargetException e) {
+                    System.out.print("{\\"success\\": false, \\"error\\": \\"" + escapeJson(e.getCause().toString()) + "\\", \\"stack\\": \\"" + arrayToString(e.getCause().getStackTrace()) + "\\"}");
+                } catch (Exception e) {
+                    System.out.print("{\\"success\\": false, \\"error\\": \\"" + escapeJson(e.toString()) + "\\", \\"stack\\": \\"" + arrayToString(e.getStackTrace()) + "\\"}");
+                }
+                
+                if (i < rawTestCases.size() - 1) System.out.print(",");
+            }
+        } catch (Exception e) {
+             System.out.print("{\\"success\\": false, \\"error\\": \\"" + escapeJson(e.toString()) + "\\", \\"stack\\": \\"" + arrayToString(e.getStackTrace()) + "\\"}");
         }
         System.out.println("]");
     }
-
-    public static int[] read1DIntArray(String file) throws Exception {
-        String content = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(file)), java.nio.charset.StandardCharsets.UTF_8).trim();
-        if (content.isEmpty()) return new int[0];
-        String[] parts = content.split(",");
-        int[] arr = new int[parts.length];
-        for (int i=0; i<parts.length; i++) arr[i] = Integer.parseInt(parts[i].trim());
-        return arr;
+    
+    private static String escapeJson(String s) {
+        if (s == null) return "null";
+        return s.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\\"").replace("\\n", "\\\\n").replace("\\r", "\\\\r").replace("\\t", "\\\\t");
     }
 
-    public static int[][] read2DIntArray(String file) throws Exception {
-        String content = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(file)), java.nio.charset.StandardCharsets.UTF_8).trim();
-        if (content.isEmpty()) return new int[0][0];
-        String[] lines = content.split("\\n");
-        int[][] arr = new int[lines.length][];
-        for (int i=0; i<lines.length; i++) {
-            if (lines[i].trim().isEmpty()) { arr[i] = new int[0]; continue; }
-            String[] parts = lines[i].split(",");
-            arr[i] = new int[parts.length];
-            for (int j=0; j<parts.length; j++) arr[i][j] = Integer.parseInt(parts[j].trim());
+    @SuppressWarnings("unchecked")
+    private static Object[] buildArguments(Object rawArgs, Type[] paramTypes, String[] schemaKeys) throws Exception {
+        Object[] args = new Object[paramTypes.length];
+        
+        List<Object> argsList = null;
+        Map<String, Object> argsMap = null;
+        
+        if (rawArgs instanceof List) {
+            argsList = (List<Object>) rawArgs;
+        } else if (rawArgs instanceof Map) {
+            argsMap = (Map<String, Object>) rawArgs;
         }
-        return arr;
-    }
-
-    public static String[] readStringArray(String file) throws Exception {
-        String content = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(file)), java.nio.charset.StandardCharsets.UTF_8);
-        if (content.isEmpty()) return new String[0];
-        return content.split("\\n--END_OF_STRING--\\n");
-    }
-
-    public static TreeNode buildTree(String data) {
-        if (data == null || data.trim().isEmpty() || data.trim().equals("[]")) return null;
-        data = data.replaceAll("\\\\[|\\\\]", "").trim();
-        if (data.isEmpty()) return null;
-        String[] parts = data.split(",");
-        if (parts.length == 0 || parts[0].trim().equals("null")) return null;
-        TreeNode root = new TreeNode(Integer.parseInt(parts[0].trim()));
-        Queue<TreeNode> q = new LinkedList<>();
-        q.add(root);
-        int i = 1;
-        while (!q.isEmpty() && i < parts.length) {
-            TreeNode curr = q.poll();
-            String leftVal = parts[i++].trim();
-            if (!leftVal.equals("null")) {
-                curr.left = new TreeNode(Integer.parseInt(leftVal));
-                q.add(curr.left);
+        
+        for (int i = 0; i < paramTypes.length; i++) {
+            Object rawArgVal = null;
+            if (argsList != null) {
+                // Positional fetch
+                if (argsList.size() == 1 && argsList.get(0) instanceof Map && schemaKeys.length > i) {
+                    rawArgVal = ((Map<String, Object>) argsList.get(0)).get(schemaKeys[i]);
+                } else if (i < argsList.size()) {
+                    rawArgVal = argsList.get(i);
+                }
+            } else if (argsMap != null) {
+                // Key-based fetch
+                if (i < schemaKeys.length && argsMap.containsKey(schemaKeys[i])) {
+                    rawArgVal = argsMap.get(schemaKeys[i]);
+                } else if (argsMap.size() == 1) { // Fallback if schema key misses
+                    rawArgVal = argsMap.values().iterator().next();
+                } else {
+                    rawArgVal = rawArgs;
+                }
+            } else {
+                rawArgVal = rawArgs;
             }
-            if (i < parts.length) {
-                String rightVal = parts[i++].trim();
-                if (!rightVal.equals("null")) {
-                    curr.right = new TreeNode(Integer.parseInt(rightVal));
-                    q.add(curr.right);
+            args[i] = JSONConverter.convertToType(rawArgVal, paramTypes[i]);
+        }
+        return args;
+    }
+
+    public static class JSONConverter {
+        @SuppressWarnings("unchecked")
+        public static Object convertToType(Object val, Type type) throws Exception {
+            if (val == null) return null;
+            
+            Class<?> clazz = null;
+            if (type instanceof Class) clazz = (Class<?>) type;
+            else if (type instanceof ParameterizedType) clazz = (Class<?>) ((ParameterizedType) type).getRawType();
+            
+            if (clazz == null) return val;
+
+            if (clazz == int.class || clazz == Integer.class) return toInt(val);
+            if (clazz == long.class || clazz == Long.class) return toLong(val);
+            if (clazz == double.class || clazz == Double.class) return toDouble(val);
+            if (clazz == float.class || clazz == Float.class) return toDouble(val).floatValue();
+            if (clazz == boolean.class || clazz == Boolean.class) return toBoolean(val);
+            if (clazz == String.class) return val.toString();
+            if (clazz == char.class || clazz == Character.class) return val.toString().charAt(0);
+            
+            if (clazz == TreeNode.class) return buildTree(val);
+            if (clazz == ListNode.class) return buildList(val);
+
+            if (clazz.isArray()) {
+                Class<?> componentType = clazz.getComponentType();
+                if (componentType == int.class) return toIntArray(val);
+                if (componentType == double.class) return toDoubleArray(val);
+                if (componentType == String.class) return toStringArray(val);
+                if (componentType == char.class) {
+                    String[] sArr = toStringArray(val);
+                    if (sArr.length > 0 && sArr[0] != null) return sArr[0].toCharArray();
+                    return new char[0];
+                }
+                if (componentType.isArray() && componentType.getComponentType() == int.class) return to2DIntArray(val);
+                if (componentType.isArray() && componentType.getComponentType() == char.class) return to2DCharArray(val);
+            }
+
+            if (List.class.isAssignableFrom(clazz)) {
+                if (!(val instanceof List)) return val;
+                List<Object> rawList = (List<Object>) val;
+                Type innerType = Object.class;
+                if (type instanceof ParameterizedType) {
+                    innerType = ((ParameterizedType) type).getActualTypeArguments()[0];
+                }
+                List<Object> result = new ArrayList<>();
+                for (Object item : rawList) {
+                    result.add(convertToType(item, innerType));
+                }
+                return result;
+            }
+
+            if (Map.class.isAssignableFrom(clazz)) {
+                // Simplified, could recurse for specific Map<K,V>
+                return val;
+            }
+
+            return val;
+        }
+
+        private static Integer toInt(Object val) {
+            if (val instanceof Number) return ((Number) val).intValue();
+            if (val instanceof String) return Double.valueOf(((String) val).trim()).intValue(); // Safe parsing from double-like string
+            return 0;
+        }
+
+        private static Long toLong(Object val) {
+            if (val instanceof Number) return ((Number) val).longValue();
+            if (val instanceof String) return Double.valueOf(((String) val).trim()).longValue();
+            return 0L;
+        }
+
+        private static Double toDouble(Object val) {
+            if (val instanceof Number) return ((Number) val).doubleValue();
+            if (val instanceof String) return Double.parseDouble(((String) val).trim());
+            return 0.0;
+        }
+
+        private static Boolean toBoolean(Object val) {
+            if (val instanceof Boolean) return (Boolean) val;
+            if (val instanceof String) return Boolean.parseBoolean(((String) val).trim());
+            return false;
+        }
+
+        private static int[] toIntArray(Object val) {
+            if (!(val instanceof List)) return new int[0];
+            List<?> list = (List<?>) val;
+            int[] arr = new int[list.size()];
+            for (int i = 0; i < list.size(); i++) arr[i] = toInt(list.get(i));
+            return arr;
+        }
+
+        private static double[] toDoubleArray(Object val) {
+            if (!(val instanceof List)) return new double[0];
+            List<?> list = (List<?>) val;
+            double[] arr = new double[list.size()];
+            for (int i = 0; i < list.size(); i++) arr[i] = toDouble(list.get(i));
+            return arr;
+        }
+
+        private static String[] toStringArray(Object val) {
+            if (!(val instanceof List)) return new String[0];
+            List<?> list = (List<?>) val;
+            String[] arr = new String[list.size()];
+            for (int i = 0; i < list.size(); i++) {
+                Object item = list.get(i);
+                arr[i] = item == null ? null : item.toString();
+            }
+            return arr;
+        }
+
+        private static int[][] to2DIntArray(Object val) {
+            if (!(val instanceof List)) return new int[0][0];
+            List<?> list = (List<?>) val;
+            int[][] arr = new int[list.size()][];
+            for (int i = 0; i < list.size(); i++) arr[i] = toIntArray(list.get(i));
+            return arr;
+        }
+
+        private static char[][] to2DCharArray(Object val) {
+            if (!(val instanceof List)) return new char[0][0];
+            List<?> list = (List<?>) val;
+            char[][] arr = new char[list.size()][];
+            for (int i = 0; i < list.size(); i++) {
+                String[] sArr = toStringArray(list.get(i));
+                arr[i] = new char[sArr.length];
+                for (int j = 0; j < sArr.length; j++) {
+                    if (sArr[j] != null && sArr[j].length() > 0) arr[i][j] = sArr[j].charAt(0);
                 }
             }
+            return arr;
         }
-        return root;
-    }
 
-    public static ListNode buildList(String data) {
-        if (data == null || data.trim().isEmpty() || data.trim().equals("[]")) return null;
-        data = data.replaceAll("\\\\[|\\\\]", "").trim();
-        if (data.isEmpty()) return null;
-        String[] parts = data.split(",");
-        ListNode dummy = new ListNode(0);
-        ListNode curr = dummy;
-        for (String p : parts) {
-            if (!p.trim().isEmpty()) {
-                curr.next = new ListNode(Integer.parseInt(p.trim()));
-                curr = curr.next;
+        @SuppressWarnings("unchecked")
+        private static TreeNode buildTree(Object val) {
+            if (val == null) return null;
+            List<?> list = null;
+            if (val instanceof List) {
+                list = (List<?>) val;
+            } else if (val instanceof Map) {
+                return buildTreeFromMap((Map<String,Object>) val);
+            } else {
+                 return null;
             }
+            
+            if (list.isEmpty()) return null;
+            Object firstOrNull = list.get(0);
+            if (firstOrNull == null) return null;
+            
+            TreeNode root = new TreeNode(toInt(firstOrNull));
+            Queue<TreeNode> q = new LinkedList<>();
+            q.add(root);
+            int i = 1;
+            while (!q.isEmpty() && i < list.size()) {
+                TreeNode curr = q.poll();
+                Object leftVal = list.get(i++);
+                if (leftVal != null) {
+                    curr.left = new TreeNode(toInt(leftVal));
+                    q.add(curr.left);
+                }
+                if (i < list.size()) {
+                    Object rightVal = list.get(i++);
+                    if (rightVal != null) {
+                        curr.right = new TreeNode(toInt(rightVal));
+                        q.add(curr.right);
+                    }
+                }
+            }
+            return root;
         }
-        return dummy.next;
+
+        private static TreeNode buildTreeFromMap(Map<String,Object> m) {
+            if (m == null) return null;
+            int val = m.containsKey("val") ? toInt(m.get("val")) : (m.containsKey("value") ? toInt(m.get("value")) : 0);
+            TreeNode node = new TreeNode(val);
+            if (m.containsKey("left")) node.left = buildTree(m.get("left"));
+            if (m.containsKey("right")) node.right = buildTree(m.get("right"));
+            return node;
+        }
+
+        private static ListNode buildList(Object val) {
+            if (!(val instanceof List)) return null;
+            List<?> list = (List<?>) val;
+            if (list.isEmpty()) return null;
+            
+            ListNode dummy = new ListNode(0);
+            ListNode curr = dummy;
+            for (Object item : list) {
+                if (item != null) {
+                    curr.next = new ListNode(toInt(item));
+                    curr = curr.next;
+                }
+            }
+            return dummy.next;
+        }
     }
 
     public static class JsonAdapter {
@@ -365,7 +345,10 @@ public class OARecall {
             json = json.trim();
             if (json.startsWith("[")) return parseList(json);
             if (json.startsWith("{")) return parseMap(json);
-            if (json.startsWith("\\"")) return json.substring(1, json.length() - 1).replace("\\\\\\\"", "\\"");
+            if (json.startsWith("\\"")) {
+                String unquoted = json.substring(1, json.length() - 1);
+                return unquoted.replace("\\\\\\\"", "\\"").replace("\\\\\\\\", "\\\\").replace("\\\\n", "\\n").replace("\\\\t", "\\t").replace("\\\\r", "\\r");
+            }
             if (json.equals("true")) return true;
             if (json.equals("false")) return false;
             if (json.equals("null")) return null;
@@ -379,22 +362,35 @@ public class OARecall {
             if (inner.isEmpty()) return list;
             int level = 0;
             boolean inQuotes = false;
+            boolean inEscape = false;
             StringBuilder sb = new StringBuilder();
+            
             for (int i = 0; i < inner.length(); i++) {
                 char c = inner.charAt(i);
-                if (c == '\\"') inQuotes = !inQuotes;
+                if (inEscape) {
+                    sb.append(c);
+                    inEscape = false;
+                    continue;
+                }
+                if (c == '\\\\') {
+                    inEscape = true;
+                    sb.append(c);
+                    continue;
+                }
+                if (c == '"') inQuotes = !inQuotes;
+                
                 if (!inQuotes) {
                     if (c == '[' || c == '{') level++;
                     if (c == ']' || c == '}') level--;
                 }
                 if (c == ',' && level == 0 && !inQuotes) {
-                    list.add(parse(sb.toString()));
+                    list.add(parse(sb.toString().trim()));
                     sb = new StringBuilder();
                 } else {
                     sb.append(c);
                 }
             }
-            list.add(parse(sb.toString()));
+            list.add(parse(sb.toString().trim()));
             return list;
         }
 
@@ -404,11 +400,24 @@ public class OARecall {
             if (inner.isEmpty()) return map;
             int level = 0;
             boolean inQuotes = false;
+            boolean inEscape = false;
             StringBuilder sb = new StringBuilder();
             String key = null;
+            
             for (int i = 0; i < inner.length(); i++) {
                 char c = inner.charAt(i);
-                if (c == '\\"') inQuotes = !inQuotes;
+                if (inEscape) {
+                    sb.append(c);
+                    inEscape = false;
+                    continue;
+                }
+                if (c == '\\\\') {
+                    inEscape = true;
+                    sb.append(c);
+                    continue;
+                }
+                if (c == '"') inQuotes = !inQuotes;
+                
                 if (!inQuotes) {
                     if (c == '[' || c == '{') level++;
                     if (c == ']' || c == '}') level--;
@@ -420,34 +429,36 @@ public class OARecall {
                     }
                 }
                 if (c == ',' && level == 0 && !inQuotes) {
-                    map.put(key, parse(sb.toString()));
+                    map.put(key, parse(sb.toString().trim()));
                     sb = new StringBuilder();
                 } else {
                     sb.append(c);
                 }
             }
-            map.put(key, parse(sb.toString()));
+            map.put(key, parse(sb.toString().trim()));
             return map;
         }
     }
 
     public static String toJSON(Object obj) {
         if (obj == null) return "null";
-        if (obj instanceof String) return "\\"" + ((String)obj).replace("\\"", "\\\\\\\"") + "\\"";
+        if (obj instanceof String) return "\\"" + escapeJson((String)obj) + "\\"";
         if (obj instanceof Number || obj instanceof Boolean) return obj.toString();
         
         if (obj instanceof TreeNode) return treeNodeToJSON((TreeNode)obj);
         if (obj instanceof ListNode) return listNodeToJSON((ListNode)obj);
         
-        if (obj instanceof int[]) return Arrays.toString((int[])obj);
-        if (obj instanceof double[]) return Arrays.toString((double[])obj);
-        if (obj instanceof char[]) return Arrays.toString((char[])obj);
-        if (obj instanceof Object[]) {
-            Object[] arr = (Object[])obj;
+        if (obj instanceof int[]) return Arrays.toString((int[])obj).replace(" ", "");
+        if (obj instanceof double[]) return Arrays.toString((double[])obj).replace(" ", "");
+        if (obj instanceof boolean[]) return Arrays.toString((boolean[])obj).replace(" ", "");
+        if (obj instanceof char[]) return "\\"" + escapeJson(new String((char[])obj)) + "\\"";
+        
+        if (obj.getClass().isArray()) {
             StringBuilder sb = new StringBuilder("[");
-            for(int i=0; i<arr.length; i++) {
-                sb.append(toJSON(arr[i]));
-                if (i < arr.length-1) sb.append(",");
+            int len = Array.getLength(obj);
+            for(int i=0; i<len; i++) {
+                sb.append(toJSON(Array.get(obj, i)));
+                if (i < len-1) sb.append(",");
             }
             sb.append("]");
             return sb.toString();
@@ -462,7 +473,20 @@ public class OARecall {
             sb.append("]");
             return sb.toString();
         }
-        return "\\"" + obj.toString().replace("\\"", "\\\\\\\"") + "\\""; 
+        if (obj instanceof Map) {
+            Map<?, ?> map = (Map<?, ?>)obj;
+            StringBuilder sb = new StringBuilder("{");
+            int i = 0;
+            for(Map.Entry<?, ?> entry : map.entrySet()) {
+                sb.append("\\"").append(escapeJson(entry.getKey().toString())).append("\\":");
+                sb.append(toJSON(entry.getValue()));
+                if (i < map.size() - 1) sb.append(",");
+                i++;
+            }
+            sb.append("}");
+            return sb.toString();
+        }
+        return "\\"" + escapeJson(obj.toString()) + "\\""; 
     }
     
     public static String treeNodeToJSON(TreeNode root) {
@@ -508,7 +532,7 @@ public class OARecall {
     public static String arrayToString(StackTraceElement[] arr) {
         StringBuilder sb = new StringBuilder();
         for (StackTraceElement el : arr) {
-            sb.append(el.toString()).append("\\n");
+            sb.append(escapeJson(el.toString())).append("\\\\n");
         }
         return sb.toString();
     }

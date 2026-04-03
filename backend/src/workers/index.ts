@@ -14,7 +14,7 @@ const { Pool } = pg;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 console.log('[System] Initializing Worker Redis connection...');
-const connection = process.env.REDIS_URL 
+const connection = process.env.REDIS_URL
     ? new Redis(process.env.REDIS_URL, {
         maxRetriesPerRequest: null,
         family: 4,

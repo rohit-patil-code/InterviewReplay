@@ -39,14 +39,14 @@ async function deleteProblemFromS3(problemId: string) {
             secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
         }
     });
-    
+
     const bucket = process.env.AWS_S3_BUCKET_NAME || 'oarecall-test-cases';
     const prefix = `problems/${problemId}/`;
 
     try {
         const listCmd = new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix });
         const listRes = await s3Client.send(listCmd);
-        
+
         if (listRes.Contents && listRes.Contents.length > 0) {
             const deleteCmd = new DeleteObjectsCommand({
                 Bucket: bucket,
@@ -110,14 +110,14 @@ export const getMyProblems = async (req: Request, res: Response, next: NextFunct
     try {
         const userId = (req as any).user.userId;
         const { search, difficulty, company, sort } = req.query;
-        
+
         const problems = await problemRepository.findByUserId(userId, {
             search: search as string,
             difficulty: difficulty as string,
             company: company as string,
             sort: sort as string
         });
-        
+
         res.status(200).json({ problems });
     } catch (error) {
         next(error);
