@@ -290,6 +290,9 @@ private static Object[] buildArguments(Object rawArgs, Type[] paramTypes, String
         private static int[] toIntArray(Object val) {
             if (!(val instanceof List)) return new int[0];
             List<?> list = (List<?>) val;
+            while (list.size() == 1 && list.get(0) instanceof List) {
+                list = (List<?>) list.get(0);
+            }
             int[] arr = new int[list.size()];
             for (int i = 0; i < list.size(); i++) arr[i] = toInt(list.get(i));
             return arr;
@@ -298,6 +301,9 @@ private static Object[] buildArguments(Object rawArgs, Type[] paramTypes, String
         private static double[] toDoubleArray(Object val) {
             if (!(val instanceof List)) return new double[0];
             List<?> list = (List<?>) val;
+            while (list.size() == 1 && list.get(0) instanceof List) {
+                list = (List<?>) list.get(0);
+            }
             double[] arr = new double[list.size()];
             for (int i = 0; i < list.size(); i++) arr[i] = toDouble(list.get(i));
             return arr;
@@ -342,6 +348,10 @@ private static Object[] buildArguments(Object rawArgs, Type[] paramTypes, String
             List<?> list = null;
             if (val instanceof List) {
                 list = (List<?>) val;
+                // Strip excessive AI nesting like [[[1,2,3]]] to prevent single-node collapse
+                while (list.size() == 1 && list.get(0) instanceof List) {
+                    list = (List<?>) list.get(0);
+                }
             } else if (val instanceof Map) {
                 return buildTreeFromMap((Map<String,Object>) val);
             } else {
@@ -386,6 +396,9 @@ private static Object[] buildArguments(Object rawArgs, Type[] paramTypes, String
         private static ListNode buildList(Object val) {
             if (!(val instanceof List)) return null;
             List<?> list = (List<?>) val;
+            while (list.size() == 1 && list.get(0) instanceof List) {
+                list = (List<?>) list.get(0);
+            }
             if (list.isEmpty()) return null;
             
             ListNode dummy = new ListNode(0);
