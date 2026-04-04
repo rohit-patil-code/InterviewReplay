@@ -122,6 +122,8 @@ def build_tree(data):
         node.left = build_tree(data.get('left'))
         node.right = build_tree(data.get('right'))
         return node
+    if isinstance(data, list):
+        while len(data) == 1 and isinstance(data[0], list): data = data[0]
     if not data or not isinstance(data, list) or data[0] is None:
         return None
     root = TreeNode(data[0])
@@ -140,6 +142,8 @@ def build_tree(data):
     return root
 
 def build_list(data):
+    if isinstance(data, list):
+        while len(data) == 1 and isinstance(data[0], list): data = data[0]
     if not data or not isinstance(data, list): return None
     dummy = ListNode(0)
     curr = dummy
