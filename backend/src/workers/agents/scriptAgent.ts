@@ -2,6 +2,7 @@ import { BaseAgent } from "./baseAgent";
 import { SandboxRunner } from "../executors/sandboxRunner";
 import { generateArrayScriptPrompt } from "../prompts/arrayPrompt";
 import { generateTreeScriptPrompt } from "../prompts/treePrompt";
+import { treePrompt2 } from "../prompts/treePrompt2";
 import { generateGraphScriptPrompt } from "../prompts/graphPrompt";
 import { generateLinkedListScriptPrompt } from "../prompts/linkedListPrompt";
 import * as fs from 'fs/promises';
@@ -60,6 +61,15 @@ ${description}
 
         let baseResponse = await this.generateWithReflection(basePrompt, 2, true, baseValidation);
         let baseParsed = JSON.parse(baseResponse);
+
+        // Phase 2.5: Tree-Specific Strict Auto-Repair
+        if (classification.main_structure === "tree") {
+            console.log(`[ScriptAgent] Phase 2.5: Strict Tree Validation & Auto-Repair...`);
+            const treeRepairPrompt = treePrompt2(JSON.stringify(baseParsed, null, 2));
+            const treeRepairResponse = await this.generateWithReflection(treeRepairPrompt, 2, true, baseValidation);
+            baseParsed = JSON.parse(treeRepairResponse);
+        }
+
         let currentScript = this.stripMarkdownBlocks(baseParsed.input_generation_script);
 
         const MAX_GROQ_REPAIRS = 3;

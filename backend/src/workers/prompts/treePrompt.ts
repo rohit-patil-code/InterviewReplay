@@ -13,7 +13,7 @@ Example: [3, 9, 20, null, null, 15, 7]
 NEVER write nested objects like {"value": 3, "left": {"value": 9, ...}}.
 
 You MUST include this helper verbatim in your script and call it before writing:
-\`\`\`
+
 function treeToBFSArray(root) {
     if (!root) return [];
     const result = [];
@@ -31,7 +31,7 @@ function treeToBFSArray(root) {
     while (result.length > 0 && result[result.length - 1] === null) result.pop();
     return result;
 }
-\`\`\`
+
 Then serialize: \`JSON.stringify([treeToBFSArray(rootNode)])\`
 
 The script MUST write this single test case to 'input_100.txt' in the current working directory synchronously.
